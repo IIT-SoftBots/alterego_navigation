@@ -1,0 +1,12 @@
+<launch>
+   
+
+  <group ns="$(env ROBOT_NAME)">
+
+    <node pkg="alterego_2dnav" type="nav2points.py" name="navigation" output="screen">
+      <rosparam file="$(find alterego_2dnav)/config/points.yaml" command="load"/>
+    </node>
+
+  </group>
+
+</launch> 

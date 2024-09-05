@@ -1,0 +1,46 @@
+<launch>
+   
+  <arg name="use_sim_time" default="false" />
+  <arg name="realsense"          default="false"/>
+
+  <group ns="$(env ROBOT_NAME)">
+
+    <group if="$(arg realsense)">
+
+      <!-- Realsense node -->
+      <include file="$(find realsense2_camera)/launch/rs_camera.launch" unless="$(arg use_sim_time)">
+        <arg name="align_depth" value="true" />
+        <arg name="enable_pointcloud" value="true" />
+      </include>
+
+      <!-- Node for converting the pointcloud in a laserscan for obastacle avoidance -->
+      <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node"
+        name="pointcloud_to_laserscan">
+        <param name="max_height" value="1" />
+        <param name="min_height" value="0.3" />
+        <param name="target_frame" value="scan" />
+        <remap from="cloud_in" to="camera/depth/color/points" />
+        <remap from="scan" to="scan_realsense" />
+      </node>
+    </group>
+
+
+    <!-- MOVE BASE Node -->
+    <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+      <rosparam file="$(find alterego_2dnav)/config/costmap_common_params.yaml" command="load"
+        ns="global_costmap" />
+      <rosparam file="$(find alterego_2dnav)/config/costmap_common_params.yaml" command="load"
+        ns="local_costmap" />
+      <rosparam file="$(find alterego_2dnav)/config/local_costmap_params.yaml" command="load" />
+      <rosparam file="$(find alterego_2dnav)/config/global_costmap_params.yaml" command="load" />
+      <rosparam file="$(find alterego_2dnav)/config/base_local_planner_params.yaml" command="load" />
+      <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" />
+      <param name="controller_frequency" value="5.0" />
+      <remap from="/cmd_vel" to="cmd_vel" />
+      <remap from="/odom" to="odom" />
+      <remap from="move_base_simple/goal" to="/move_base_simple/goal" />
+    </node>
+
+  </group>
+
+</launch> 
