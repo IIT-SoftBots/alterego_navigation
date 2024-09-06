@@ -6,11 +6,11 @@
 #
 
 # Overall filter parameters
-min_particles:        50       # 100,500
-max_particles:        1000     # 5000
+min_particles:        500       # 100,500
+max_particles:        2000     # 5000
 kld_err:              0.05      # 0.01, 0.05
 kld_z:                0.99      # 0.99
-update_min_d:         0.1       # 0.2
+update_min_d:         0.2       # 0.2
 update_min_a:         0.5235    # 0.5235
 resample_interval:    1         # 2, 1
 transform_tolerance:  0.2       # 0.1, 0.2

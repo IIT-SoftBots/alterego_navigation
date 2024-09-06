@@ -5,12 +5,12 @@
 
 
     <!-- Include amcl.launch with pass_all_args=true -->
-    <include file="$(find alterego_2dnav)/launch/amcl.launch" pass_all_args="true" />
+    <include file="$(find navigation_stack)/launch/amcl.launch" pass_all_args="true" />
 
     <!-- Node for converting the realsense pointcloud into a laserscan and create a merged laserscan with the lidar -->
-    <!-- <include file="$(find alterego_2dnav)/launch/merge_laser.launch" pass_all_args="true" /> -->
+    <!-- <include file="$(find navigation_stack)/launch/merge_laser.launch" pass_all_args="true" /> -->
 
     <!-- Include move_base.launch -->
-    <include file="$(find alterego_2dnav)/launch/move_base.launch" pass_all_args="true"  />
+    <include file="$(find navigation_stack)/launch/move_base.launch" pass_all_args="true"  />
 
 </launch>

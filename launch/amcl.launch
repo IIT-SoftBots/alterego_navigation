@@ -2,15 +2,9 @@
    <arg name="use_sim_time" default="false" />
    
 
-   <arg name="yamlAmcl" default="$(find alterego_2dnav)/config/amcl.yaml"/>
+   <arg name="yamlAmcl" default="$(find navigation_stack)/config/amcl.yaml"/>
     <group ns="$(env ROBOT_NAME)">      
 
-      <node name="lidar"          pkg="rplidar_ros"  type="rplidarNode" output="screen" unless="$(arg use_sim_time)">
-         <param name="serial_baudrate"     type="int"    value="115200"/>
-         <param name="frame_id"            type="string" value="scan"/>
-         <param name="inverted"            type="bool"   value="false"/>
-         <param name="angle_compensate"    type="bool"   value="true"/>
-      </node>
       <!--- Run 2D AMCL -->
       <node pkg="amcl" type="amcl" name="amcl" output="screen">
          <!-- Run the map server --> 
@@ -20,7 +14,7 @@
 
 
       <!--- LOAD Pre built map -->
-      <node name="map_server" pkg="map_server" type="map_server" args="$(find alterego_2dnav)/config/maps/office/demo1.yaml"/>
+      <node name="map_server" pkg="map_server" type="map_server" args="$(find navigation_stack)/config/maps/office/demo1.yaml"/>
 
       </group>
 </launch> 
