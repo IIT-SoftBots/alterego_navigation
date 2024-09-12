@@ -1,7 +1,8 @@
 TebLocalPlannerROS:
 
   map_frame: map
-      
+  odom_frame: odom
+  transform_tolerance: 0.5    
   # Trajectory
     
   teb_autosize: True                            # Mantieni True per consentire al planner di adattare automaticamente la dimensione della traiettoria
@@ -14,7 +15,7 @@ TebLocalPlannerROS:
   # Robot
           
   max_vel_x: 15 #0.25                         # velocità massima lungo l'asse x [rad/s]
-  max_vel_x_backwards: 0.1 #0.2               # velocità massima all'indietro lungo l'asse x [rad/s]
+  max_vel_x_backwards: 0.2 #0.2               # velocità massima all'indietro lungo l'asse x [rad/s]
   max_vel_theta: 1.0 #0.5                     # velocità angolare massima [rad/s]
   acc_lim_x: 10 # 0.2                         # accelerazione massima lungo l'asse x [rad/s^2]
   acc_lim_theta: 0.6283 #0.5, 0.26            # accelerazione angolare massima [rad/s^2]
@@ -32,26 +33,26 @@ TebLocalPlannerROS:
                                               #(per evitare che il robot si muova liberamente una volta raggiunto l'obiettivo)
   # Obstacles
       
-  min_obstacle_dist: 0.1                    # distanza minima dall'ostacolo [m]
-  inflation_dist: 0.1                       # distanza di inflazione dell'ostacolo [m]
+  min_obstacle_dist: 0.05                     # distanza minima dall'ostacolo [m]
+  inflation_dist: 0.0                        # distanza di inflazione dell'ostacolo [m]
   dynamic_obstacle_inflation_dist: 0.1       # distanza di inflazione dell'ostacolo dinamico [m]
   include_costmap_obstacles: True            # se True, considera gli ostacoli della mappa di costo
-  costmap_obstacles_behind_robot_dist: 0.1  
-  obstacle_poses_affected: 25 #30
-  costmap_converter_plugin: ""
-  costmap_converter_spin_thread: True
-  costmap_converter_rate: 5
+  costmap_obstacles_behind_robot_dist: 0.1   # distanza minima dall'ostacolo alla posizione attuale del robot [m]
+  obstacle_poses_affected: 25 #30            # numero di pose successive da considerare per l'interazione con gli ostacoli
+  costmap_converter_plugin: ""               # plugin per convertire la mappa di costo in ostacoli
+  costmap_converter_spin_thread: True        # se True, esegui il plugin in un thread separato
+  costmap_converter_rate: 5                  # frequenza di aggiornamento del plugin [Hz]
 
   # Optimization
       
-  no_inner_iterations: 5 #5
-  no_outer_iterations: 4 #4
+  no_inner_iterations: 5 #5                  # numero di iterazioni per la minimizzazione interna
+  no_outer_iterations: 4 #4         
   optimization_activate: True
-  optimization_verbose: False
-  penalty_epsilon: 0.1
-  weight_max_vel_x: 2 #2
-  weight_max_vel_theta: 1 #1
-  weight_acc_lim_x: 2 # 1
+  optimization_verbose: False 
+  penalty_epsilon: 0.1                       # valore epsilon per la penalizzazione della distanza dall'ostacolo
+  weight_max_vel_x: 2 #2                     # peso per la velocità massima lungo l'asse x
+  weight_max_vel_theta: 1 #1                 # peso per la velocità angolare massima
+  weight_acc_lim_x: 2 # 1 
   weight_acc_lim_theta: 1 # 1
   weight_kinematics_nh: 1000 #1000
   weight_kinematics_forward_drive: 1000000 #1000 #1000000             # Aumenta il peso per penalizzare il movimento all'indietro

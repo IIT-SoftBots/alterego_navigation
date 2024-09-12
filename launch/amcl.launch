@@ -3,18 +3,18 @@
    
 
    <arg name="yamlAmcl" default="$(find navigation_stack)/config/amcl.yaml"/>
-    <group ns="$(env ROBOT_NAME)">      
+      <group ns="$(env ROBOT_NAME)">      
 
-      <!--- Run 2D AMCL -->
-      <node pkg="amcl" type="amcl" name="amcl" output="screen">
-         <!-- Run the map server --> 
-         <rosparam command="load" file="$(arg yamlAmcl)"/>
-         <remap from="initialpose" to="/initialpose"/> 
-      </node>
+         <!--- Run 2D AMCL -->
+         <node pkg="amcl" type="amcl" name="amcl" output="screen">
+            <!-- Run the map server --> 
+            <rosparam command="load" file="$(arg yamlAmcl)"/>
+            <remap from="initialpose" to="/initialpose"/>
+         </node>
 
 
-      <!--- LOAD Pre built map -->
-      <node name="map_server" pkg="map_server" type="map_server" args="$(find navigation_stack)/config/maps/office/demo1.yaml"/>
+         <!--- LOAD Pre built map -->
+         <node name="map_server" pkg="map_server" type="map_server" args="$(find navigation_stack)/config/maps/office/demo1.yaml"/>
 
       </group>
 </launch> 
