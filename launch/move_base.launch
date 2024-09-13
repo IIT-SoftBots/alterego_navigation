@@ -35,8 +35,13 @@
       <rosparam file="$(find navigation_stack)/config/global_costmap_params.yaml" command="load" />
       <rosparam file="$(find navigation_stack)/config/base_local_planner_params.yaml" command="load" />
       <rosparam file="$(find navigation_stack)/config/move_base_params.yaml" command="load" />
+      <rosparam file="$(find navigation_stack)/config/global_planner_params.yaml" command="load" />
        <!-- Configurazione del pianificatore locale (TEB Local Planner) -->
       <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" />
+      <!-- Configurazione del pianificatore globale -->
+      <!-- <param name="base_global_planner" value="global_planner/GlobalPlanner" /> -->
+      <param name="base_global_planner" value="navfn/NavfnROS" />
+
       <param name="controller_frequency" value="5.0" />
       <remap from="/cmd_vel" to="cmd_vel" />
       <remap from="/odom" to="odom" />
