@@ -7,17 +7,17 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 import actionlib
 from actionlib_msgs.msg import *
 from std_msgs.msg import String  # Importa il tipo di messaggio String
+from std_msgs.msg import Bool  # Importa il tipo di messaggio String
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from tf.transformations import euler_from_quaternion
 import math
 from nav_msgs.msg import Path
-
+import subprocess
 class GoForwardAvoid():
     def __init__(self):
         rospy.init_node('navigation', anonymous=False)
 
         # Inizializzazione e setup
-        self.current_pose = None
         self.path_length = 0.0
 
         # what to do if shut down (e.g. ctrl + C or failure)
@@ -28,18 +28,15 @@ class GoForwardAvoid():
         
         # Aggiungi un subscriber al topic 'target_location'
         rospy.Subscriber('target_location', String, self.target_location_callback)
-        rospy.Subscriber('amcl_pose', PoseWithCovarianceStamped, self.pose_callback)
         rospy.Subscriber("move_base/TebLocalPlannerROS/local_plan", Path, self.path_callback)
+        
+        self.goal_reached_pub = rospy.Publisher('/robot_alterego3/goal_reached', String, queue_size=10)
         # Inizializza la variabile target
         self.target = None
 
 
-    def pose_callback(self, msg):
-        self.current_pose = msg.pose.pose
-
     def path_callback(self, msg):
         self.path_length = self.calculate_path_length(msg)
-        rospy.loginfo(f"Current path length: {self.path_length} meters")
 
     def calculate_path_length(self, path):
         length = 0.0
@@ -83,19 +80,28 @@ class GoForwardAvoid():
                 goal.target_pose.pose.orientation.z = orientation['z']
                 goal.target_pose.pose.orientation.w = orientation['w']
 
+                bag_command = "rosbag play -l /home/alterego-base/catkin_ws/src/AlterEGO_v2/navigation_stack/rosbags/normal.bag"
+                bag_process = subprocess.Popen(bag_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 #start moving
                 self.move_base.send_goal(goal)
                 while not rospy.is_shutdown():
                     state = self.move_base.get_state()
                     if state in [GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.REJECTED]:
+                        rospy.loginfo("Goal reached successfully.")
                         break
                     if self.path_length < 1.0:
                         rospy.loginfo("Goal is within 1 meter.")
                     rospy.sleep(1)
                 if state == GoalStatus.SUCCEEDED:
                     rospy.loginfo("Goal reached successfully.")
+                    self.goal_reached_pub.publish("SUCCEEDED")
                 else:
                     rospy.loginfo("Failed to reach the goal.")
+                    self.goal_reached_pub.publish("ABORTED")
+                        # Interrompi la riproduzione della bag file
+                bag_process.terminate()
+                bag_process.wait()
+
     
     
     def shutdown(self):

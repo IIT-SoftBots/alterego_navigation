@@ -14,10 +14,10 @@ TebLocalPlannerROS:
                                                 #(Puoi aumentarlo se vuoi un controllo di fattibilità più rigoroso)
   # Robot
           
-  max_vel_x: 15 #0.25                         # velocità massima lungo l'asse x [rad/s]
-  max_vel_x_backwards: 0.2 #0.2               # velocità massima all'indietro lungo l'asse x [rad/s]
-  max_vel_theta: 1.0 #0.5                     # velocità angolare massima [rad/s]
-  acc_lim_x: 10 # 0.2                         # accelerazione massima lungo l'asse x [rad/s^2]
+  max_vel_x: 100 #0.25                         # velocità massima lungo l'asse x [rad/s]
+  max_vel_x_backwards: 0.5 #0.2               # velocità massima all'indietro lungo l'asse x [rad/s]
+  max_vel_theta: 5.0 #0.5                     # velocità angolare massima [rad/s]
+  acc_lim_x: 5 # 0.2                         # accelerazione massima lungo l'asse x [rad/s^2]
   acc_lim_theta: 0.6283 #0.5, 0.26            # accelerazione angolare massima [rad/s^2]
   min_turning_radius: 0.0                     # turning radius [m] (car-like robots) (0.0: non-omnidirectional)
   footprint_model: # types: "point", "circular", "two_circles", "line", "polygon"
@@ -27,7 +27,7 @@ TebLocalPlannerROS:
 
   # GoalTolerance
       
-  xy_goal_tolerance: 0.2 #0.2                 # tolleranza sulla posizione del goal [m]
+  xy_goal_tolerance: 0.3 #0.2                 # tolleranza sulla posizione del goal [m]
   yaw_goal_tolerance: 0.1571                  # tolleranza sull'orientamento del goal [rad]
   free_goal_vel: False                        # se True, il robot può raggiungere il goal con una velocità non nulla
                                               #(per evitare che il robot si muova liberamente una volta raggiunto l'obiettivo)
@@ -50,15 +50,15 @@ TebLocalPlannerROS:
   optimization_activate: True
   optimization_verbose: False 
   penalty_epsilon: 0.1                       # valore epsilon per la penalizzazione della distanza dall'ostacolo
-  weight_max_vel_x: 2 #2                     # peso per la velocità massima lungo l'asse x
+  weight_max_vel_x: 0 #2                     # peso per la velocità massima lungo l'asse x
   weight_max_vel_theta: 1 #1                 # peso per la velocità angolare massima
-  weight_acc_lim_x: 2 # 1 
+  weight_acc_lim_x: 0.5 # 1 
   weight_acc_lim_theta: 1 # 1
   weight_kinematics_nh: 1000 #1000
-  weight_kinematics_forward_drive: 1000000 #1000 #1000000             # Aumenta il peso per penalizzare il movimento all'indietro
+  weight_kinematics_forward_drive: 100000 #1000 #1000000             # Aumenta il peso per penalizzare il movimento all'indietro
   weight_kinematics_turning_radius: 1 #1 #only for car-like robots
-  weight_optimaltime: 1.0 #1
-  weight_obstacle: 50 #50
+  weight_optimaltime: 5.0 #1
+  weight_obstacle: 75 #50
   weight_viapoint: 5.0 #5.0 #1.0
   weight_inflation: 0.1 #0.1
   weight_dynamic_obstacle: 10 # not in use yet

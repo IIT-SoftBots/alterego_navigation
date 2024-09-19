@@ -1,16 +1,63 @@
 <launch>
     
    <arg name="use_sim_time" default="false" />
-   
+    <arg name="AlterEgoVersion" default="3"/>
+    <arg name="yamlAmcl" default="$(find navigation_stack)/config/amcl.yaml"/>
+    <arg name="urdf_dir" value="$(find alterego_robot)/alterego_description/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro" />
+    <param name="robot_description" command="$(find xacro)/xacro '$(arg urdf_dir)' ENABLE_CAMERA:=false ENABLE_LASER:=false ENABLE_REALSENSE:=false" />
+    <group ns="$(env ROBOT_NAME)"> 
+
+        <!--- Run lidar node -->
+        <node name="lidar"          pkg="rplidar_ros"  type="rplidarNode" output="screen" unless="$(arg use_sim_time)">
+            <param name="serial_baudrate"     type="int"    value="115200"/>
+            <param name="frame_id"            type="string" value="scan"/>
+            <param name="inverted"            type="bool"   value="false"/>
+            <param name="angle_compensate"    type="bool"   value="true"/>
+        </node>
+
+        <!--- Run 2D AMCL -->
+        <node pkg="amcl" type="amcl" name="amcl" output="screen">
+            <rosparam command="load" file="$(arg yamlAmcl)"/>
+            <remap from="initialpose" to="/initialpose"/> 
+        </node>
+
+        <!--- LOAD Pre built map -->
+        <node name="map_server" pkg="map_server" type="map_server" args="$(find navigation_stack)/config/maps/galata/galata_3_cleaned.yaml"/>
+
+        <!-- MOVE BASE Node -->
+        <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+            <rosparam file="$(find navigation_stack)/config/costmap_common_params.yaml" command="load"
+                ns="global_costmap" />
+            <rosparam file="$(find navigation_stack)/config/costmap_common_params.yaml" command="load"
+                ns="local_costmap" />
+            <rosparam file="$(find navigation_stack)/config/local_costmap_params.yaml" command="load" />
+            <rosparam file="$(find navigation_stack)/config/global_costmap_params.yaml" command="load" />
+            <rosparam file="$(find navigation_stack)/config/base_local_planner_params.yaml" command="load" />
+            <rosparam file="$(find navigation_stack)/config/move_base_params.yaml" command="load" />
+            <rosparam file="$(find navigation_stack)/config/global_planner_params.yaml" command="load" />
+            <!-- Configurazione del pianificatore locale (TEB Local Planner) -->
+            <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" />
+            <!-- Configurazione del pianificatore globale -->
+            <!-- <param name="base_global_planner" value="global_planner/GlobalPlanner" /> -->
+            <param name="base_global_planner" value="navfn/NavfnROS" />
+
+            <param name="controller_frequency" value="5.0" />
+            <remap from="/cmd_vel" to="cmd_vel" />
+            <remap from="/odom" to="odom" />
+            <remap from="move_base_simple/goal" to="/move_base_simple/goal" />  
+        </node>
+
+        <node pkg="navigation_stack" type="nav2points.py" name="navigation" output="screen">
+            <rosparam file="$(find navigation_stack)/config/points.yaml" command="load"/>
+            <rosparam file="$(find navigation_stack)/config/keypoints.yaml" command="load"/>
+        </node>
+        <node pkg="navigation_stack" type="initialpose.py" name="initialpose" output="screen"/>
+        <node pkg="navigation_stack" type="send_key_points.py" name="send_key_points" output="screen"/>
+        <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen" />
+        <node pkg="visualize_robot" name="visualize_robot" type="visualize_robot_node" output="screen"/>    
 
 
-    <!-- Include amcl.launch with pass_all_args=true -->
-    <include file="$(find navigation_stack)/launch/amcl.launch" pass_all_args="true" />
+    </group>
 
-    <!-- Node for converting the realsense pointcloud into a laserscan and create a merged laserscan with the lidar -->
-    <!-- <include file="$(find navigation_stack)/launch/merge_laser.launch" pass_all_args="true" /> -->
-
-    <!-- Include move_base.launch -->
-    <include file="$(find navigation_stack)/launch/move_base.launch" pass_all_args="true"  />
 
 </launch>
