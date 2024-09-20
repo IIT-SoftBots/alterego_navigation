@@ -15,8 +15,8 @@ class KeyPointSender:
         rospy.on_shutdown(self.shutdown)
 
         self.key_points = self.load_key_points(rospy.get_param('navigation/KeyPoints'))
-        self.pub = rospy.Publisher('/robot_alterego3/nearest_point', String, queue_size=10)
-        self.marker_pub = rospy.Publisher('/keypoint_markers_array', MarkerArray, queue_size=10)
+        self.pub = rospy.Publisher('nearest_point', String, queue_size=10)
+        self.marker_pub = rospy.Publisher('keypoint_markers_array', MarkerArray, queue_size=10)
         self.threshold = 2  # Soglia di distanza in metri
         self.angle_threshold = 60.0  # Soglia di angolo in gradi (30 gradi diviso per 2)
         self.last_published_point = None  # Variabile per memorizzare l'ultimo punto pubblicato

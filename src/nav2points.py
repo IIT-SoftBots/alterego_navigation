@@ -30,7 +30,7 @@ class GoForwardAvoid():
         rospy.Subscriber('target_location', String, self.target_location_callback)
         rospy.Subscriber("move_base/TebLocalPlannerROS/local_plan", Path, self.path_callback)
         
-        self.goal_reached_pub = rospy.Publisher('/robot_alterego3/goal_reached', String, queue_size=10)
+        self.goal_reached_pub = rospy.Publisher('goal_reached', String, queue_size=10)
         # Inizializza la variabile target
         self.target = None
 

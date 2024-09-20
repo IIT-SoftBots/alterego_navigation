@@ -15,7 +15,7 @@ def publish_pose():
     rospy.sleep(1)
 
     # Leggi i dati di "Ingresso" da point_list
-    point_list = rospy.get_param('/robot_alterego3/navigation/Locations')
+    point_list = rospy.get_param('navigation/Locations')
     ingresso_data = None
     for location in point_list:
         if 'Ingresso' in location:
