@@ -18,7 +18,8 @@ class GoForwardAvoid():
         rospy.init_node('navigation', anonymous=False)
 
         # Inizializzazione e setup
-        self.path_length = 0.0
+        self.path_length = None
+        self.goal_reached_published = False  # Variabile di stato per tenere traccia se il messaggio è già stato pubblicato
 
         # what to do if shut down (e.g. ctrl + C or failure)
         rospy.on_shutdown(self.shutdown)
@@ -33,11 +34,13 @@ class GoForwardAvoid():
         self.goal_reached_pub = rospy.Publisher('goal_reached', String, queue_size=10)
         # Inizializza la variabile target
         self.target = None
+        self.first_encounter = True
 
-
+    
     def path_callback(self, msg):
         self.path_length = self.calculate_path_length(msg)
 
+ 
     def calculate_path_length(self, path):
         length = 0.0
         for i in range(len(path.poses) - 1):
@@ -51,6 +54,10 @@ class GoForwardAvoid():
     def target_location_callback(self, msg):
         # Imposta la variabile target con il messaggio ricevuto
         self.target = msg.data
+        self.goal_reached_published = False  # 
+        self.path_length = None
+
+
         rospy.loginfo(f"Target location updated to: {self.target}")
         # tell the action client that we want to spin a thread by default
         self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
@@ -80,8 +87,6 @@ class GoForwardAvoid():
                 goal.target_pose.pose.orientation.z = orientation['z']
                 goal.target_pose.pose.orientation.w = orientation['w']
 
-                bag_command = "rosbag play -l /home/alterego-base/catkin_ws/src/AlterEGO_v2/navigation_stack/rosbags/normal.bag"
-                bag_process = subprocess.Popen(bag_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 #start moving
                 self.move_base.send_goal(goal)
                 while not rospy.is_shutdown():
@@ -89,18 +94,21 @@ class GoForwardAvoid():
                     if state in [GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.REJECTED]:
                         rospy.loginfo("Goal reached successfully.")
                         break
-                    if self.path_length < 1.0:
-                        rospy.loginfo("Goal is within 1 meter.")
+                    if self.path_length is not None:
+                        if self.path_length < 1.5 and not self.goal_reached_published:
+                            self.goal_reached_pub.publish("SUCCEEDED")
+                            self.goal_reached_published = True  # 
+                            rospy.loginfo("Goal is within 1 meter.")
+
                     rospy.sleep(1)
                 if state == GoalStatus.SUCCEEDED:
-                    rospy.loginfo("Goal reached successfully.")
                     self.goal_reached_pub.publish("SUCCEEDED")
+                    rospy.loginfo("Goal reached successfully.")
                 else:
                     rospy.loginfo("Failed to reach the goal.")
                     self.goal_reached_pub.publish("ABORTED")
                         # Interrompi la riproduzione della bag file
-                bag_process.terminate()
-                bag_process.wait()
+
 
     
     

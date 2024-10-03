@@ -54,6 +54,9 @@
       </node>
     </group>
 
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen" unless="$(arg use_sim_time)"/>  <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
+    <node pkg="visualize_robot" name="visualize_robot" type="visualize_robot_node" output="screen" unless="$(arg use_sim_time)"/>                               <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
+
   </group>
 
 
