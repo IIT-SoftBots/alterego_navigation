@@ -4,6 +4,7 @@
 
 import rospy
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+from std_srvs.srv import Empty
 import actionlib
 from actionlib_msgs.msg import *
 from std_msgs.msg import String  # Importa il tipo di messaggio String
@@ -74,6 +75,15 @@ class GoForwardAvoid():
                 orientation = data['orientation']
                 print(f"Target Position: {position}")
                 print(f"Target Orientation: {orientation}")
+                
+                # Clear costmaps before sending the goal
+                rospy.wait_for_service('/robot_alterego3/move_base/clear_costmaps')
+                try:
+                    clear_costmaps = rospy.ServiceProxy('/robot_alterego3/move_base/clear_costmaps', Empty)
+                    clear_costmaps()
+                    rospy.loginfo("Costmaps cleared successfully.")
+                except rospy.ServiceException as e:
+                    rospy.logerr(f"Service call failed: {e}")
 
 
                 #set up the frame parameters
