@@ -1,8 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # license removed for brevity
 
 import rospy
+import os
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from std_srvs.srv import Empty
 import actionlib
@@ -16,6 +17,9 @@ from nav_msgs.msg import Path
 import subprocess
 class GoForwardAvoid():
     def __init__(self):
+        
+        # Get robot name from environment variable
+        self.robot_name = os.getenv('ROBOT_NAME', 'robot_alterego3')
         rospy.init_node('navigation', anonymous=False)
 
         # Inizializzazione e setup
@@ -77,9 +81,9 @@ class GoForwardAvoid():
                 print(f"Target Orientation: {orientation}")
                 
                 # Clear costmaps before sending the goal
-                rospy.wait_for_service('/robot_alterego3/move_base/clear_costmaps')
+                rospy.wait_for_service('f"/{self.robot_name}/move_base/clear_costmaps')
                 try:
-                    clear_costmaps = rospy.ServiceProxy('/robot_alterego3/move_base/clear_costmaps', Empty)
+                    clear_costmaps = rospy.ServiceProxy('f"/{self.robot_name}/move_base/clear_costmaps', Empty)
                     clear_costmaps()
                     rospy.loginfo("Costmaps cleared successfully.")
                 except rospy.ServiceException as e:
