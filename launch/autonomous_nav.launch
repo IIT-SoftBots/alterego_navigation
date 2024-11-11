@@ -1,12 +1,34 @@
 <launch>
-    <arg name="AlterEgoVersion" default="3"/>
+    <!-- Versione di AlterEgo -->
+    <arg name="AlterEgoVersion" default="3" />
+
+    <!-- Utilizzare il tempo di simulazione -->
     <arg name="use_sim_time" default="false" />
-    <arg name="realsense"          default="false"/>
-    <arg name="merge_laser"          default="false"/>
-    <arg name="yamlAmcl" default="$(find navigation_stack)/config/amcl.yaml"/>
-    <arg name="urdf_dir" value="$(find alterego_robot)/alterego_description/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro" />
-    <arg name="map_dir" value="$(find navigation_stack)/config/maps/galata/galata_3_cleaned.yaml" />
+
+    <!-- Posizione attuale del robot -->
+    <arg name="location" default="eurobin" />
+
+    <!-- Abilitare la fotocamera Realsense -->
+    <arg name="realsense" default="false" />
+
+    <!-- Unire i dati del laser -->
+    <arg name="merge_laser" default="false" />
+
+    <!-- Percorso del file di configurazione AMCL -->
+    <arg name="yamlAmcl" default="$(find navigation_stack)/config/move_base_config/amcl.yaml" />
+
+    <!-- Percorso del file URDF -->
+    <arg name="urdf_dir" value="$(find alterego_robot)/alterego_description/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro"/>
+
+    <!-- Percorso del file della mappa -->
+    <arg name="map_dir" value="$(find navigation_stack)/config/$(arg location)_config/maps/map.yaml" />
+
+    <!-- Descrizione del robot -->
     <param name="robot_description" command="$(find xacro)/xacro '$(arg urdf_dir)' ENABLE_CAMERA:=false ENABLE_LASER:=true ENABLE_REALSENSE:=false" />
+
+    <!-- Nodo per pubblicare lo stato del robot -->
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen" unless="$(arg use_sim_time)" />
+    
     <group ns="$(env ROBOT_NAME)"> 
 
         <group if="$(arg realsense)">
@@ -68,16 +90,16 @@
             <param name="base_global_planner" value="global_planner/GlobalPlanner" />
             <!-- <param name="base_global_planner" value="navfn/NavfnROS" /> -->
             
-            <rosparam file="$(find navigation_stack)/config/costmap_common_params.yaml" command="load"
+            <rosparam file="$(find navigation_stack)/config/move_base_config/costmap_common_params.yaml" command="load"
                 ns="global_costmap" />
-            <rosparam file="$(find navigation_stack)/config/costmap_common_params.yaml" command="load"
+            <rosparam file="$(find navigation_stack)/config/move_base_config/costmap_common_params.yaml" command="load"
                 ns="local_costmap" />
-            <rosparam file="$(find navigation_stack)/config/local_costmap_params.yaml" command="load" />
-            <rosparam file="$(find navigation_stack)/config/global_costmap_params.yaml" command="load" />
-            <rosparam file="$(find navigation_stack)/config/base_local_planner_params.yaml" command="load" unless="$(arg use_sim_time)"/> <!-- This file will be loaded only on the real robot because in simulation the params are different-->
-            <rosparam file="$(find navigation_stack)/config/base_local_planner_params_sim.yaml" command="load" if="$(arg use_sim_time)"/> <!-- This file will be loaded only on the in simulation when the use_sim_time is true-->
-            <!-- <rosparam file="$(find navigation_stack)/config/move_base_params.yaml" command="load" /> -->
-            <rosparam file="$(find navigation_stack)/config/global_planner_params.yaml" command="load" />
+            <rosparam file="$(find navigation_stack)/config/move_base_config/local_costmap_params.yaml" command="load" />
+            <rosparam file="$(find navigation_stack)/config/move_base_config/global_costmap_params.yaml" command="load" />
+            <rosparam file="$(find navigation_stack)/config/move_base_config/base_local_planner_params.yaml" command="load" unless="$(arg use_sim_time)"/> <!-- This file will be loaded only on the real robot because in simulation the params are different-->
+            <rosparam file="$(find navigation_stack)/config/move_base_config/base_local_planner_params_sim.yaml" command="load" if="$(arg use_sim_time)"/> <!-- This file will be loaded only on the in simulation when the use_sim_time is true-->
+            <!-- <rosparam file="$(find navigation_stack)/config/move_base_config/move_base_params.yaml" command="load" /> -->
+            <rosparam file="$(find navigation_stack)/config/move_base_config/global_planner_params.yaml" command="load" />
             
 
 
@@ -88,15 +110,14 @@
 
         </node>
 
-        <node pkg="navigation_stack" type="nav2points.py" name="navigation" output="screen">
-            <rosparam file="$(find navigation_stack)/config/points.yaml" command="load"/>
-            <rosparam file="$(find navigation_stack)/config/keypoints.yaml" command="load"/>
+        <node pkg="navigation_stack" type="nav2points_service.py" name="navigation" output="screen">
+            <rosparam file="$(find navigation_stack)/config/$(arg location)_config/points/points.yaml" command="load"/>
+            <!-- <rosparam file="$(find navigation_stack)/config/$(arg location)_config/points/keypoints.yaml" command="load"/> -->
         </node>
 
-        <node pkg="navigation_stack" type="initialpose.py" name="initialpose" output="screen"/>
-        <node pkg="navigation_stack" type="send_key_points.py" name="send_key_points" output="screen"/>
+        <!-- <node pkg="navigation_stack" type="initialpose.py" name="initialpose" output="screen"/> -->
+        <!-- <node pkg="navigation_stack" type="send_key_points.py" name="send_key_points" output="screen"/> -->
 
-        <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen" unless="$(arg use_sim_time)"/>  <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
         <node pkg="visualize_robot" name="visualize_robot" type="visualize_robot_node" output="screen" unless="$(arg use_sim_time)"/>                               <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
 
 

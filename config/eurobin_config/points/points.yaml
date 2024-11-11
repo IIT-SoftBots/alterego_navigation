@@ -1,0 +1,144 @@
+Locations:
+  - KIT:
+    - cabinet:
+        position:
+          x: 0
+          y: 1.21
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.90
+          w: 0.41
+    - dishwasher:
+        position:
+          x: 0
+          y: 1.21
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.90
+          w: 0.41
+    - table:
+        position:
+          x: 0
+          y: 1.21
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.90
+          w: 0.41
+    - kitchen:
+        position:
+          x: 0
+          y: 1.21
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.90
+          w: 0.41
+  - DLR:
+    - cabinet:
+        position:
+          x: 1.29
+          y: 0.13
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.98
+          w: 0.18
+    - dishwasher:
+        position:
+          x: 1.29
+          y: 0.13
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.98
+          w: 0.18
+    - table:
+        position:
+          x: 1.29
+          y: 0.13
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.98
+          w: 0.18
+    - kitchen:
+        position:
+          x: 1.29
+          y: 0.13
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.98
+          w: 0.18
+  - INRIA:
+    - cabinet:
+        position:
+          x: 0
+          y: 1.21
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.90
+          w: 0.41
+    - dishwasher:
+        position:
+          x: 1.29
+          y: 0.13
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.98
+          w: 0.18
+    - table:
+        position:
+          x: 0
+          y: 1.21
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.90
+          w: 0.41
+    - kitchen:
+        position:
+          x: 1.29
+          y: 0.13
+          z: 0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.98
+          w: 0.18
+  - Door KIT-INRIA: #Door Sud 
+      position:
+        x: 16.56
+        y: -0.86
+        z: 0.0
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.85
+        w: 0.51
+  - Door INRIA-KIT:  #Door Nord
+      position:
+        x: 16.56
+        y: -0.86
+        z: 0.0
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.85
+        w: 0.51

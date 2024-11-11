@@ -1,66 +1,71 @@
 <?xml version="1.0"?>
 
 <launch>
+  <!-- Versione di AlterEgo -->
+  <arg name="AlterEgoVersion" default="3" doc="Versione del robot AlterEgo"/>
 
-  <arg name="realsense"          default="false"/>
-  <arg name="use_sim_time" default="false" />
+  <!-- Utilizzare il tempo di simulazione -->
+  <arg name="use_sim_time" default="false" doc="Utilizzare il tempo di simulazione (true) o il tempo reale (false)"/>
 
-  <arg name="AlterEgoVersion" default="3"/>
-  <arg name="urdf_dir" value="$(find alterego_robot)/alterego_description/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro" />
-  <param name="robot_description"
-      command="$(find xacro)/xacro '$(arg urdf_dir)' ENABLE_CAMERA:=false ENABLE_LASER:=false ENABLE_REALSENSE:=false" />
+  <!-- Abilitare la fotocamera Realsense -->
+  <arg name="realsense" default="true" doc="Abilitare la fotocamera Realsense (true) o disabilitarla (false)"/>
 
+  <!-- Percorso del file URDF -->
+  <arg name="urdf_dir" value="$(find alterego_robot)/alterego_description/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro" doc="Percorso del file URDF del robot"/>
+
+  <!-- Descrizione del robot -->
+  <param name="robot_description" command="$(find xacro)/xacro '$(arg urdf_dir)' ENABLE_CAMERA:=false ENABLE_LASER:=false ENABLE_REALSENSE:=false" doc="Descrizione del robot generata dal file URDF"/>
+
+  <!-- Nodo per pubblicare lo stato del robot -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen" unless="$(arg use_sim_time)" doc="Nodo per pubblicare lo stato del robot. Questo nodo viene caricato solo sul robot reale, poiché nella simulazione è già stato caricato"/>
 
   <group ns="$(env ROBOT_NAME)">
-    <!-- Convert the pointcloud in a laserscan -->
+    <!-- Convertire la pointcloud in un laserscan -->
 
-
-    <!-- 2D SLAM based on laserscan-->
-    <node name="lidar"          pkg="rplidar_ros"  type="rplidarNode" output="screen" unless="$(arg use_sim_time)">
-      <param name="serial_baudrate"     type="int"    value="115200"/>
-      <param name="frame_id"            type="string" value="scan"/>
-      <param name="inverted"            type="bool"   value="false"/>
-      <param name="angle_compensate"    type="bool"   value="true"/>
+    <!-- 2D SLAM basato su laserscan -->
+    <node name="lidar" pkg="rplidar_ros" type="rplidarNode" output="screen" unless="$(arg use_sim_time)" doc="Nodo per il lidar RPLIDAR. Questo nodo viene caricato solo sul robot reale">
+      <param name="serial_baudrate" type="int" value="115200" doc="Baudrate della connessione seriale"/>
+      <param name="frame_id" type="string" value="scan" doc="ID del frame del lidar"/>
+      <param name="inverted" type="bool" value="false" doc="Invertire la scansione (true) o no (false)"/>
+      <param name="angle_compensate" type="bool" value="true" doc="Compensare l'angolo (true) o no (false)"/>
     </node>
 
+    <!-- Include il file di lancio per Hector Mapping -->
     <include file="$(find hector_mapping)/launch/mapping_default.launch">
-      <arg name="base_frame" default="base_link"/>
-      <arg name="odom_frame" default="odom"/>
+      <arg name="base_frame" default="base_link" doc="Frame di base per Hector Mapping"/>
+      <arg name="odom_frame" default="odom" doc="Frame odometrico per Hector Mapping"/>
     </include>
 
     <group if="$(arg realsense)">
-      <!-- 3D Mapping using the pointcloud - in this way the map is considering also the forniture -->
-      <include file="$(find realsense2_camera)/launch/rs_camera.launch" unless="$(arg use_sim_time)">
-          <arg name="align_depth" value="true"/>
-          <arg name="enable_pointcloud" value="true"/>
+      <!-- 3D Mapping utilizzando la pointcloud - in questo modo la mappa considera anche i mobili -->
+      <include file="$(find realsense2_camera)/launch/rs_camera.launch" unless="$(arg use_sim_time)" doc="Include il file di lancio per la fotocamera Realsense. Questo nodo viene caricato solo sul robot reale">
+        <arg name="align_depth" value="true" doc="Allineare la profondità (true)"/>
+        <arg name="enable_pointcloud" value="true" doc="Abilitare la pointcloud (true)"/>
       </include>
 
-      <node pkg="octomap_server" type="octomap_server_node" name="octomap_server">
-        <param name="resolution" value="0.05" />
-        <!-- fixed map frame (set to 'map' if SLAM or localization running!) -->
-        <param name="frame_id" type="string" value="map" />
-        <param name="base_frame_id" value="base_link"/>
-        <!-- maximum range to integrate (speedup!) -->
-        <param name="sensor_model/max_range" value="2.5" />
-        <param name="pointcloud_min_z" value="0.3" />
-        <param name="pointcloud_max_z" value="1.5" />
-        <!-- data source to integrate (PointCloud2) -->
-        <remap from="cloud_in" to="camera/depth/color/points"/>
+      <!-- Nodo per il server Octomap -->
+      <node pkg="octomap_server" type="octomap_server_node" name="octomap_server" doc="Nodo per il server Octomap">
+        <param name="resolution" value="0.05" doc="Risoluzione della mappa Octomap"/>
+        <param name="frame_id" type="string" value="map" doc="ID del frame della mappa"/>
+        <param name="base_frame_id" value="base_link" doc="ID del frame di base"/>
+        <param name="sensor_model/max_range" value="2.5" doc="Raggio massimo del sensore"/>
+        <param name="pointcloud_min_z" value="0.3" doc="Altezza minima della pointcloud"/>
+        <param name="pointcloud_max_z" value="1.5" doc="Altezza massima della pointcloud"/>
+        <remap from="cloud_in" to="camera/depth/color/points" doc="Rimappa l'input della pointcloud"/>
       </node>
 
-      <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
-        <param name="max_height" value="1.5"/>
-        <param name="min_height" value="0.1"/>
-        <param name="target_frame" value="scan"/>
-        <remap from="cloud_in" to="camera/depth/color/points"/>
-        <remap from="scan" to="camera/scan"/> 
+      <!-- Nodo per convertire la pointcloud in laserscan -->
+      <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan" doc="Nodo per convertire la pointcloud in laserscan">
+        <param name="max_height" value="1.5" doc="Altezza massima della pointcloud"/>
+        <param name="min_height" value="0.1" doc="Altezza minima della pointcloud"/>
+        <param name="target_frame" value="scan" doc="Frame di destinazione per il laserscan"/>
+        <remap from="cloud_in" to="camera/depth/color/points" doc="Rimappa l'input della pointcloud"/>
+        <remap from="scan" to="camera/scan" doc="Rimappa l'output del laserscan"/>
       </node>
     </group>
 
-    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen" unless="$(arg use_sim_time)"/>  <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
-    <node pkg="visualize_robot" name="visualize_robot" type="visualize_robot_node" output="screen" unless="$(arg use_sim_time)"/>                               <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
-
+    <!-- Nodo per visualizzare il robot -->
+    <node pkg="visualize_robot" name="visualize_robot" type="visualize_robot_node" output="screen" unless="$(arg use_sim_time)" doc="Nodo per visualizzare il robot. Questo nodo viene caricato solo sul robot reale"/>
   </group>
-
 
 </launch>
