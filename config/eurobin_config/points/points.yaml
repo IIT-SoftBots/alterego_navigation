@@ -122,23 +122,24 @@ Locations:
           y: 0.0
           z: 0.98
           w: 0.18
-  - Door KIT-INRIA: #Door Sud 
-      position:
-        x: 16.56
-        y: -0.86
-        z: 0.0
-      orientation:
-        x: 0.0
-        y: 0.0
-        z: 0.85
-        w: 0.51
-  - Door INRIA-KIT:  #Door Nord
-      position:
-        x: 16.56
-        y: -0.86
-        z: 0.0
-      orientation:
-        x: 0.0
-        y: 0.0
-        z: 0.85
-        w: 0.51
+  - Door:
+    - KIT-INRIA: #Door Sud 
+        position:
+          x: 16.56
+          y: -0.86
+          z: 0.0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.85
+          w: 0.51
+    - INRIA-KIT:  #Door Nord
+        position:
+          x: 16.56
+          y: -0.86
+          z: 0.0
+        orientation:
+          x: 0.0
+          y: 0.0
+          z: 0.85
+          w: 0.51
