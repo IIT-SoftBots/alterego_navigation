@@ -21,7 +21,7 @@
     <arg name="urdf_dir" value="$(find alterego_robot)/alterego_description/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro"/>
 
     <!-- Percorso del file della mappa -->
-    <arg name="map_dir" value="$(find navigation_stack)/config/$(arg location)_config/maps/map.yaml" />
+    <arg name="map_dir" value="$(find navigation_stack)/config/$(arg location)_config/maps/eurobin_arena_2_clean_new.yaml" />
 
     <!-- Descrizione del robot -->
     <param name="robot_description" command="$(find xacro)/xacro '$(arg urdf_dir)' ENABLE_CAMERA:=false ENABLE_LASER:=true ENABLE_REALSENSE:=false" />

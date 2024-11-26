@@ -55,52 +55,58 @@ class GotoTarget():
 
     def navigate_to_location(self):
         goal = MoveBaseGoal()
-        for location in self._point_list:
-            if self.new_location in location:
-                if self.new_sub_location in location[self.new_location]:
-                    data = location[self.new_location][self.new_sub_location]
-                    position = data['position']
-                    orientation = data['orientation']
-                    rospy.loginfo(f"Target Position: {position}")
-                    rospy.loginfo(f"Target Orientation: {orientation}")
-                    
-                    # Clear costmaps before sending the goal
-                    rospy.wait_for_service(f'/{self.robot_name}/move_base/clear_costmaps')
-                    try:
-                        clear_costmaps = rospy.ServiceProxy(f'/{self.robot_name}/move_base/clear_costmaps', Empty)
-                        clear_costmaps()
-                        rospy.loginfo("Costmaps cleared successfully.")
-                    except rospy.ServiceException as e:
-                        rospy.logerr(f"Service call failed: {e}")
+        # print(self._point_list)
 
-                    # Set up the frame parameters
-                    goal.target_pose.header.frame_id = 'map'
-                    goal.target_pose.header.stamp = rospy.Time.now()
-                    goal.target_pose.pose.position.x = position['x']
-                    goal.target_pose.pose.position.y = position['y']
-                    goal.target_pose.pose.position.z = position['z']
-                    goal.target_pose.pose.orientation.x = orientation['x']
-                    goal.target_pose.pose.orientation.y = orientation['y']
-                    goal.target_pose.pose.orientation.z = orientation['z']
-                    goal.target_pose.pose.orientation.w = orientation['w']
+        for location_dict in self._point_list:
+            if self.new_location in location_dict:
+                print(self.new_location)
+                sub_locations = location_dict[self.new_location]
+                for sub_location_dict in sub_locations:
+                    if self.new_sub_location in sub_location_dict:
+                        print(self.new_sub_location)                
+                        data = sub_location_dict[self.new_sub_location]
+                        position = data['position']
+                        orientation = data['orientation']
+                        rospy.loginfo(f"Target Position: {position}")
+                        rospy.loginfo(f"Target Orientation: {orientation}")
+                        
+                        # Clear costmaps before sending the goal
+                        rospy.wait_for_service(f'/{self.robot_name}/move_base/clear_costmaps')
+                        try:
+                            clear_costmaps = rospy.ServiceProxy(f'/{self.robot_name}/move_base/clear_costmaps', Empty)
+                            clear_costmaps()
+                            rospy.loginfo("Costmaps cleared successfully.")
+                        except rospy.ServiceException as e:
+                            rospy.logerr(f"Service call failed: {e}")
 
-                    # Start moving
-                    self.move_base.send_goal(goal)
-                    state = self.move_base.get_state()
-                    while state not in [GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.REJECTED] and not rospy.is_shutdown():
+                        # Set up the frame parameters
+                        goal.target_pose.header.frame_id = 'map'
+                        goal.target_pose.header.stamp = rospy.Time.now()
+                        goal.target_pose.pose.position.x = position['x']
+                        goal.target_pose.pose.position.y = position['y']
+                        goal.target_pose.pose.position.z = position['z']
+                        goal.target_pose.pose.orientation.x = orientation['x']
+                        goal.target_pose.pose.orientation.y = orientation['y']
+                        goal.target_pose.pose.orientation.z = orientation['z']
+                        goal.target_pose.pose.orientation.w = orientation['w']
+
+                        # Start moving
+                        self.move_base.send_goal(goal)
                         state = self.move_base.get_state()
-                        rospy.sleep(1)
-                    
-                    if state == GoalStatus.SUCCEEDED:
-                        self.goal_reached = True
-                        with self.condition:
-                            self.condition.notify_all()
-                        rospy.loginfo("Goal reached successfully.")
-                    else:
-                        rospy.loginfo("Failed to reach the goal.")
-                        self.goal_reached = False
-                        with self.condition:
-                            self.condition.notify_all()
+                        while state not in [GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.REJECTED] and not rospy.is_shutdown():
+                            state = self.move_base.get_state()
+                            rospy.sleep(1)
+                        
+                        if state == GoalStatus.SUCCEEDED:
+                            self.goal_reached = True
+                            with self.condition:
+                                self.condition.notify_all()
+                            rospy.loginfo("Goal reached successfully.")
+                        else:
+                            rospy.loginfo("Failed to reach the goal.")
+                            self.goal_reached = False
+                            with self.condition:
+                                self.condition.notify_all()
 
     def shutdown(self):
         rospy.loginfo("Stop")
