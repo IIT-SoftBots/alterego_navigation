@@ -73,6 +73,7 @@ class GoForwardAvoid():
         # Create a new goal with the MoveBaseGoal constructor
         goal = MoveBaseGoal()
         for location in self._point_list:
+            print(location)
             if self.target in location:
                 data = location[self.target]  # Usa self.target per accedere al punto corretto
                 position = data['position']
@@ -81,13 +82,13 @@ class GoForwardAvoid():
                 print(f"Target Orientation: {orientation}")
                 
                 # Clear costmaps before sending the goal
-                rospy.wait_for_service('f"/{self.robot_name}/move_base/clear_costmaps')
-                try:
-                    clear_costmaps = rospy.ServiceProxy('f"/{self.robot_name}/move_base/clear_costmaps', Empty)
-                    clear_costmaps()
-                    rospy.loginfo("Costmaps cleared successfully.")
-                except rospy.ServiceException as e:
-                    rospy.logerr(f"Service call failed: {e}")
+                # rospy.wait_for_service('f"/{self.robot_name}/move_base/clear_costmaps')
+                # try:
+                #     clear_costmaps = rospy.ServiceProxy('f"/{self.robot_name}/move_base/clear_costmaps', Empty)
+                #     clear_costmaps()
+                #     rospy.loginfo("Costmaps cleared successfully.")
+                # except rospy.ServiceException as e:
+                #     rospy.logerr(f"Service call failed: {e}")
 
 
                 #set up the frame parameters
