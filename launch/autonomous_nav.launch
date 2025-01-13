@@ -15,13 +15,13 @@
     <arg name="merge_laser" default="false" />
 
     <!-- Percorso del file di configurazione AMCL -->
-    <arg name="yamlAmcl" default="$(find navigation_stack)/config/move_base_config/amcl.yaml" />
+    <arg name="yamlAmcl" default="$(find alterego_navigation)/config/move_base_config/amcl.yaml" />
 
     <!-- Percorso del file URDF -->
-    <arg name="urdf_dir" value="$(find alterego_robot)/alterego_description/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro"/>
+    <arg name="urdf_dir" value="$(find alterego_description)/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro"/>
 
     <!-- Percorso del file della mappa -->
-    <arg name="map_dir" value="$(find navigation_stack)/config/$(arg location)_config/maps/galata_3_cleaned.yaml" />
+    <arg name="map_dir" value="$(find alterego_navigation)/config/$(arg location)_config/maps/galata_3_cleaned.yaml" />
 
     <!-- Descrizione del robot -->
     <param name="robot_description" command="$(find xacro)/xacro '$(arg urdf_dir)' ENABLE_CAMERA:=false ENABLE_LASER:=true ENABLE_REALSENSE:=false" />
@@ -90,16 +90,16 @@
             <param name="base_global_planner" value="global_planner/GlobalPlanner" />
             <!-- <param name="base_global_planner" value="navfn/NavfnROS" /> -->
             
-            <rosparam file="$(find navigation_stack)/config/move_base_config/costmap_common_params.yaml" command="load"
+            <rosparam file="$(find alterego_navigation)/config/move_base_config/costmap_common_params.yaml" command="load"
                 ns="global_costmap" />
-            <rosparam file="$(find navigation_stack)/config/move_base_config/costmap_common_params.yaml" command="load"
+            <rosparam file="$(find alterego_navigation)/config/move_base_config/costmap_common_params.yaml" command="load"
                 ns="local_costmap" />
-            <rosparam file="$(find navigation_stack)/config/move_base_config/local_costmap_params.yaml" command="load" />
-            <rosparam file="$(find navigation_stack)/config/move_base_config/global_costmap_params.yaml" command="load" />
-            <rosparam file="$(find navigation_stack)/config/move_base_config/base_local_planner_params.yaml" command="load" unless="$(arg use_sim_time)"/> <!-- This file will be loaded only on the real robot because in simulation the params are different-->
-            <rosparam file="$(find navigation_stack)/config/move_base_config/base_local_planner_params_sim.yaml" command="load" if="$(arg use_sim_time)"/> <!-- This file will be loaded only on the in simulation when the use_sim_time is true-->
-            <!-- <rosparam file="$(find navigation_stack)/config/move_base_config/move_base_params.yaml" command="load" /> -->
-            <rosparam file="$(find navigation_stack)/config/move_base_config/global_planner_params.yaml" command="load" />
+            <rosparam file="$(find alterego_navigation)/config/move_base_config/local_costmap_params.yaml" command="load" />
+            <rosparam file="$(find alterego_navigation)/config/move_base_config/global_costmap_params.yaml" command="load" />
+            <rosparam file="$(find alterego_navigation)/config/move_base_config/base_local_planner_params.yaml" command="load" unless="$(arg use_sim_time)"/> <!-- This file will be loaded only on the real robot because in simulation the params are different-->
+            <rosparam file="$(find alterego_navigation)/config/move_base_config/base_local_planner_params_sim.yaml" command="load" if="$(arg use_sim_time)"/> <!-- This file will be loaded only on the in simulation when the use_sim_time is true-->
+            <!-- <rosparam file="$(find alterego_navigation)/config/move_base_config/move_base_params.yaml" command="load" /> -->
+            <rosparam file="$(find alterego_navigation)/config/move_base_config/global_planner_params.yaml" command="load" />
             
 
 
@@ -110,14 +110,14 @@
 
         </node>
 
-        <node pkg="navigation_stack" type="nav2points.py" name="navigation" output="screen">
-            <rosparam file="$(find navigation_stack)/config/$(arg location)_config/points/points.yaml" command="load"/>
-            <rosparam file="$(find navigation_stack)/config/$(arg location)_config/points/keypoints.yaml" command="load"/>
+        <node pkg="alterego_navigation" type="nav2points.py" name="navigation" output="screen">
+            <rosparam file="$(find alterego_navigation)/config/$(arg location)_config/points/points.yaml" command="load"/>
+            <rosparam file="$(find alterego_navigation)/config/$(arg location)_config/points/keypoints.yaml" command="load"/>
         </node>
 
-        <node pkg="navigation_stack" type="initialpose.py" name="initialpose" output="screen"/>
-        <!-- <node pkg="navigation_stack" type="where_are_you_service.py" name="send_key_points" output="screen"/> -->
-        <node pkg="navigation_stack" type="send_key_points.py" name="send_key_points" output="screen"/>
+        <node pkg="alterego_navigation" type="initialpose.py" name="initialpose" output="screen"/>
+        <!-- <node pkg="alterego_navigation" type="where_are_you_service.py" name="send_key_points" output="screen"/> -->
+        <node pkg="alterego_navigation" type="send_key_points.py" name="send_key_points" output="screen"/>
 
         <node pkg="visualize_robot" name="visualize_robot" type="visualize_robot_node" output="screen" unless="$(arg use_sim_time)"/>                               <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
 
