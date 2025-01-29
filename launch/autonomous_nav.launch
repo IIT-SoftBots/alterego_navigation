@@ -18,7 +18,7 @@
     <arg name="yamlAmcl" default="$(find alterego_navigation)/config/move_base_config/amcl.yaml" />
 
     <!-- Percorso del file URDF -->
-    <arg name="urdf_dir" value="$(find alterego_description)/urdf/ego_robot_gazebo_v$(arg AlterEgoVersion).urdf.xacro"/>
+    <arg name="urdf_dir" value="$(find alterego_description)/urdf/ego_robot_gazebo.urdf.xacro"/>
 
     <!-- Percorso del file della mappa -->
     <arg name="map_dir" value="$(find alterego_navigation)/config/$(arg location)_config/maps/galata_3_cleaned.yaml" />
