@@ -1,0 +1,12 @@
+Locations:
+  - Ingresso:
+      position:
+        x: 16.56
+        y: -0.86
+        z: 0.0
+      orientation:
+        x: 0.0
+        y: 0.0
+        z: 0.85
+        w: 0.51
+     
