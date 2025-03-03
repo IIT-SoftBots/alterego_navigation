@@ -8,10 +8,10 @@
     <arg name="use_sim_time" default="false" />
 
     <!-- Posizione attuale del robot -->
-    <arg name="location" default="office" />
+    <arg name="location" default="galata" />
 
     <!-- Abilitare la fotocamera Realsense -->
-    <arg name="realsense" default="true" />
+    <arg name="realsense" default="false" />
 
     <!-- Unire i dati del laser -->
     <arg name="merge_laser" default="false" />
@@ -23,7 +23,7 @@
     <arg name="urdf_dir" value="$(find alterego_description)/urdf/ego_robot_gazebo.urdf.xacro"/>
 
     <!-- Percorso del file della mappa -->
-    <arg name="map_dir" value="$(find alterego_navigation)/config/$(arg location)_config/maps/real_office.yaml" />
+    <arg name="map_dir" value="$(find alterego_navigation)/config/$(arg location)_config/maps/galata_3_cleaned.yaml" />
 
     <!-- Descrizione del robot -->
     <param name="robot_description"
@@ -120,14 +120,14 @@
 
         </node>
 
-        <node pkg="alterego_navigation" type="nav2points_service.py" name="navigation" output="screen">
+        <node pkg="alterego_navigation" type="nav2points.py" name="navigation" output="screen">
             <rosparam file="$(find alterego_navigation)/config/$(arg location)_config/points/points.yaml" command="load"/>
-            <!-- <rosparam file="$(find alterego_navigation)/config/$(arg location)_config/points/keypoints.yaml" command="load"/> -->
+            <rosparam file="$(find alterego_navigation)/config/$(arg location)_config/points/keypoints.yaml" command="load"/>
         </node>
 
         <node pkg="alterego_navigation" type="initialpose.py" name="initialpose" output="screen"/>
         <!-- <node pkg="alterego_navigation" type="where_are_you_service.py" name="send_key_points" output="screen"/> -->
-        <!-- <node pkg="alterego_navigation" type="send_key_points.py" name="send_key_points" output="screen"/> -->
+        <node pkg="alterego_navigation" type="send_key_points.py" name="send_key_points" output="screen"/>
 
         <node pkg="alterego_visualization" name="visualize_robot" type="visualize_robot_node" output="screen" unless="$(arg use_sim_time)"/>                               <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
 
