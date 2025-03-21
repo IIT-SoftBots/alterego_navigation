@@ -9,7 +9,7 @@ TebLocalPlannerROS:
   dt_ref: 0.3 #0.2                              # intervallo di tempo di riferimento in cui la traiettoria viene campionata [s]
   dt_hysteresis: 0.1 #0.1                       # intervallo di tempo aggiuntivo per la pianificazione della traiettoria [s]
   global_plan_overwrite_orientation: True 
-  max_global_plan_lookahead_dist: 3.0 #2.0      # massima distanza di ricerca del piano globale [m]
+  max_global_plan_lookahead_dist: 0.1 #2.0      # massima distanza di ricerca del piano globale [m]
   feasibility_check_no_poses: 5                 # numero di pose successive da controllare per la fattibilità
                                                 #(Puoi aumentarlo se vuoi un controllo di fattibilità più rigoroso)
   # Robot

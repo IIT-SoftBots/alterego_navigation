@@ -1,38 +1,64 @@
+# Global Costmap parameters optimized for Segway robot with 2D LIDAR
 global_costmap:
-  global_frame: map
-  robot_base_frame: base_link
-  update_frequency: 2.5
-  publish_frequency: 2.5
-  rolling_window: false
-  width: 10.0
-  height: 10.0
-  resolution: 0.05
-  static_map: true
-  observation_persistence: 0.0  
-  track_unknown_space: true # Add this line to track unknown space
-          
+  # Frame settings
+  global_frame: map  # The global frame for the costmap
+  robot_base_frame: base_link  # The robot's base frame
+  transform_tolerance: 0.3  # Maximum time to wait for transforms (seconds)
+  
+  # Update settings
+  update_frequency: 4.0  # Frequency to update the costmap (Hz)
+  publish_frequency: 3.0  # Frequency to publish the costmap (Hz)
+  
+  # Map settings
+  static_map: true  # Whether to use a static map
+  rolling_window: false  # Global costmap doesn't use rolling window
+  
+  # Size and resolution
+  width: 15.0  # Width of the costmap (meters)
+  height: 15.0  # Height of the costmap (meters)
+  resolution: 0.08  # Resolution of the costmap (meters/cell)
+  
+  # Robot physical properties
+  robot_radius: 0.3  # Radius of the robot (meters)
+  # Alternative: Detailed footprint
+  # footprint: [[-0.3, -0.3], [-0.3, 0.3], [0.3, 0.3], [0.3, -0.3]]
+  
+  # Observation settings
+  observation_persistence: 0.0  # Time to keep observations (seconds)
+  track_unknown_space: true  # Useful for detecting unmapped areas
+  
+  # Plugins for costmap layers
   plugins:
     - {name: static_layer, type: "costmap_2d::StaticLayer"}
     - {name: obstacle_layer, type: "costmap_2d::ObstacleLayer"}
     - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
 
+  # Static layer configuration
   static_layer:
-    map_topic: map
-    subscribe_to_updates: true
-    track_unknown_space: true
-    unknown_cost_value: 255
+    map_topic: map_with_obstacles  # Topic for the static map
+    subscribe_to_updates: true  # Subscribe to map updates
+    track_unknown_space: true  # Track unknown space in the static layer
+    unknown_cost_value: 255  # Cost value for unknown space
+    lethal_cost_threshold: 100  # Threshold for lethal obstacles
 
-    #   use_maximum: false
-    #   lethal_cost_threshold: 100
-    #   map_file: /home/alterego-base/catkin_ws/src/AlterEGO_v2/navigation_stack/config/maps/office/demo1_exclusions.pgm  # Path to your map file
-    #   origin: [0.0, 0.0, 0.0]
-    #   resolution: 0.05
-
+  # Obstacle layer configuration
   obstacle_layer:
-    max_obstacle_height: 1.0
-    observation_sources: laser_scan_sensor
-    laser_scan_sensor: {sensor_frame: scan, data_type: LaserScan, topic: scan, marking: true, clearing: true}
+    max_obstacle_height: 1.0  # Maximum height of obstacles (meters)
+    observation_sources: laser_scan_sensor  # Sources for obstacle observations
+    # LIDAR configuration - adjust topic name if needed
+    laser_scan_sensor: {
+      sensor_frame: scan,  # Frame of the LIDAR
+      data_type: LaserScan,  # Type of data
+      topic: scan,  # Topic for laser scans
+      marking: true,  # Mark obstacles
+      clearing: true,  # Clear free space
+      max_obstacle_height: 0.5,  # Max height for obstacles from this sensor
+      min_obstacle_height: 0.05,  # Min height for obstacles from this sensor
+      obstacle_range: 5.0,  # Maximum range to mark obstacles
+      raytrace_range: 6.0  # Maximum range to clear space
+    }
 
+  # Inflation layer configuration
   inflation_layer:
-    inflation_radius: 0.5
-    cost_scaling_factor: 5.0 
+    inflation_radius: 0.7  # Radius for inflation (meters)
+    cost_scaling_factor: 2.5  # Lower value creates gentler gradient

@@ -1,52 +1,47 @@
+# Parametri AMCL ottimizzati per robot Segway con LIDAR 2D
 #
-# http://www.ros.org/wiki/amcl
-# The first commented value is the default per the wiki
-# The second commented value is the default per nav/amcl/examples
-# The defaults in amcl_node.cpp are yet differant...
-#
+# Parametri generali del filtro
+min_particles:        500       # Mantieni un buon numero minimo di particelle
+max_particles:        2000      # Compromesso tra precisione e prestazioni
+kld_err:              0.05      # Valore appropriato per l'errore KLD
+kld_z:                0.99      # Valore standard per il parametro KLD z
+update_min_d:         0.1       # Ridotto per aggiornamenti più frequenti (da 0.2)
+update_min_a:         0.3       # Ridotto per aggiornamenti più frequenti durante le rotazioni (da 0.5235)
+resample_interval:    1         # Ricampionamento ad ogni aggiornamento
+transform_tolerance:  0.2       # Tolleranza per trasformazioni TF
+recovery_alpha_slow:  0.001     # Valore appropriato per recupero lento
+recovery_alpha_fast:  0.1       # Valore appropriato per recupero veloce
+initial_pose_x:       0.0       # Posizione iniziale x
+initial_pose_y:       0.0       # Posizione iniziale y
+initial_pose_a:       0.0       # Orientamento iniziale
+initial_cov_xx:       0.25      # Covarianza iniziale x
+initial_cov_yy:       0.25      # Covarianza iniziale y
+initial_cov_aa:       0.06853   # Covarianza iniziale orientamento
+gui_publish_rate:     10.0      # Frequenza di pubblicazione per la GUI
+save_pose_rate:       0.5       # Frequenza di salvataggio della posizione
+use_map_topic:        true      # Usa il topic map per ottenere la mappa
+first_map_only:       true      # Usa solo la prima mappa ricevuta
 
-# Overall filter parameters
-min_particles:        500       # 100,500
-max_particles:        2000     # 5000
-kld_err:              0.05      # 0.01, 0.05
-kld_z:                0.99      # 0.99
-update_min_d:         0.2       # 0.2
-update_min_a:         0.5235    # 0.5235
-resample_interval:    1         # 2, 1
-transform_tolerance:  0.2       # 0.1, 0.2
-recovery_alpha_slow:  0.001     # 0.0, 0.0, 0.001
-recovery_alpha_fast:  0.1       # 0.0, 0.0, 0.1
-initial_pose_x:       0.0       # 0.0
-initial_pose_y:       0.0       # 0.0
-initial_pose_a:       0.0       # 0.0
-initial_cov_xx:       0.25      # 0.25
-initial_cov_yy:       0.25      # 0.25
-initial_cov_aa:       0.06853   # 0.06853 
-gui_publish_rate:     10.0      # -1.0, 10
-save_pose_rate:       0.5       # 0.5
-use_map_topic:        true      # false
-first_map_only:       true     # false
+# Parametri del modello laser
+laser_min_range:            -1.0   # Usa il valore predefinito del sensore
+laser_max_range:            -1.0   # Usa il valore predefinito del sensore
+laser_max_beams:            180    # Numero appropriato di raggi
+laser_z_hit:                0.7    # Aumentato per dare più peso ai match corretti (da 0.5)
+laser_z_short:              0.05   # Valore appropriato per raggi corti
+laser_z_max:                0.05   # Valore appropriato per raggi max
+laser_z_rand:               0.2    # Ridotto per dare meno peso ai valori casuali (da 0.5)
+laser_sigma_hit:            0.2    # Deviazione standard per hit
+laser_lambda_short:         0.1    # Lambda per raggi corti
+laser_likelihood_max_dist:  2.0    # Distanza massima per likelihood
+laser_model_type:           likelihood_field  # Modello migliore per ambienti strutturati
 
-# Laser Model Parameters 
-laser_min_range:            -1.0   # -1.0
-laser_max_range:            -1.0   # -1.0
-laser_max_beams:            180    # 180
-laser_z_hit:                0.5   # 0.95, 0.5
-laser_z_short:              0.05    # 0.1,  0.05
-laser_z_max:                0.05   # 0.05 
-laser_z_rand:               0.5   # 0.05, 0.5
-laser_sigma_hit:            0.2    # 0.2   
-laser_lambda_short:         0.1    # 0.1
-laser_likelihood_max_dist:  2.0    # 2.0
-laser_model_type:           likelihood_field
-
-# Odometery model parameters
-odom_model_type:  diff-corrected
-odom_alpha1:      0.2    # 0.2 rr
-odom_alpha2:      0.2   # 0.2 rt
-odom_alpha3:      0.8    # 0.2,0.8 tt
-odom_alpha4:      0.2   # 0.2 tr
-odom_alpha5:      0.1    # 0.2,0.1
+# Parametri del modello di odometria
+odom_model_type:  diff-corrected  # Corretto per robot a trazione differenziale
+odom_alpha1:      0.2    # Rumore durante la rotazione quando il robot ruota
+odom_alpha2:      0.2    # Rumore durante la rotazione quando il robot si muove in avanti
+odom_alpha3:      0.5    # Ridotto per riflettere una migliore precisione nella traslazione (da 0.8)
+odom_alpha4:      0.2    # Rumore durante la traslazione quando il robot ruota
+odom_alpha5:      0.1    # Rumore di traslazione direttamente proporzionale alla traslazione
 odom_frame_id:    odom 
 base_frame_id:    base_link
-global_frame_id:  map 
+global_frame_id:  map

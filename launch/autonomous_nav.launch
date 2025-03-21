@@ -1,6 +1,6 @@
 <launch>
     <!-- Versione di AlterEgo -->
-    <arg name="AlterEgoVersion" default="3" />
+    <arg name="AlterEgoVersion" default="4" />
     
     <arg name="enable_fixed_hands" default="true" />
 
@@ -8,7 +8,7 @@
     <arg name="use_sim_time" default="false" />
 
     <!-- Posizione attuale del robot -->
-    <arg name="location" default="galata" />
+    <arg name="location" default="adriano" />
 
     <!-- Abilitare la fotocamera Realsense -->
     <arg name="realsense" default="false" />
@@ -23,7 +23,8 @@
     <arg name="urdf_dir" value="$(find alterego_description)/urdf/ego_robot_gazebo.urdf.xacro"/>
 
     <!-- Percorso del file della mappa -->
-    <arg name="map_dir" value="$(find alterego_navigation)/config/$(arg location)_config/maps/galata_3_cleaned.yaml" />
+    <arg name="map_dir" value="$(find alterego_navigation)/config/$(arg location)_config/maps/undocking_cleaned.yaml" />
+    <arg name="map_dir_obs" value="$(find alterego_navigation)/config/$(arg location)_config/maps/undocking_cleaned_obs.yaml" />
 
     <!-- Descrizione del robot -->
     <param name="robot_description"
@@ -90,6 +91,13 @@
 
         <!--- LOAD Pre built map -->
         <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_dir)"/>
+        <node name="map_server_obstacle" pkg="map_server" type="map_server" args="$(arg map_dir_obs)">
+            <remap from="map" to="map_with_obstacles"/>
+        </node>
+
+        <node name="map_server_obstacle_local" pkg="map_server" type="map_server" args="$(arg map_dir_obs)">
+            <remap from="map" to="map_with_obstacles_local"/>
+        </node>
 
         <!-- MOVE BASE Node -->
         <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
@@ -107,13 +115,13 @@
             <rosparam file="$(find alterego_navigation)/config/move_base_config/local_costmap_params.yaml" command="load" />
             <rosparam file="$(find alterego_navigation)/config/move_base_config/global_costmap_params.yaml" command="load" />
             <rosparam file="$(find alterego_navigation)/config/move_base_config/base_local_planner_params.yaml" command="load" unless="$(arg use_sim_time)"/> <!-- This file will be loaded only on the real robot because in simulation the params are different-->
-            <rosparam file="$(find alterego_navigation)/config/move_base_config/base_local_planner_params_sim.yaml" command="load" if="$(arg use_sim_time)"/> <!-- This file will be loaded only on the in simulation when the use_sim_time is true-->
+            <!-- <rosparam file="$(find alterego_navigation)/config/move_base_config/base_local_planner_params_sim.yaml" command="load" if="$(arg use_sim_time)"/> This file will be loaded only on the in simulation when the use_sim_time is true -->
             <!-- <rosparam file="$(find alterego_navigation)/config/move_base_config/move_base_params.yaml" command="load" /> -->
             <rosparam file="$(find alterego_navigation)/config/move_base_config/global_planner_params.yaml" command="load" />
             
 
 
-            <param name="controller_frequency" value="5.0" />
+            <param name="controller_frequency" value="10.0" />
             <remap from="/cmd_vel" to="cmd_vel" />
             <remap from="/odom" to="odom" />
             <remap from="move_base_simple/goal" to="/move_base_simple/goal" />  
@@ -127,7 +135,7 @@
 
         <node pkg="alterego_navigation" type="initialpose.py" name="initialpose" output="screen"/>
         <!-- <node pkg="alterego_navigation" type="where_are_you_service.py" name="send_key_points" output="screen"/> -->
-        <node pkg="alterego_navigation" type="send_key_points.py" name="send_key_points" output="screen"/>
+        <!-- <node pkg="alterego_navigation" type="send_key_points.py" name="send_key_points" output="screen"/> -->
 
         <node pkg="alterego_visualization" name="visualize_robot" type="visualize_robot_node" output="screen" unless="$(arg use_sim_time)"/>                               <!-- This file will be loaded only on the real robot because in simulation it has been already loaded-->
 

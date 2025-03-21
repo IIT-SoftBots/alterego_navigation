@@ -1,0 +1,23 @@
+Locations:
+  - Dock station:
+      position: 
+        x: 0.5
+        y: 0.4
+        z: 0.0
+      orientation: 
+        x: 0.0
+        y: 0.0
+        z: 0.9996061873276811
+        w: 0.02
+  - Mostra1:
+      position: 
+        x: 3.16955267863259
+        y: -3.4008164258714526
+        z: 0.0
+      orientation: 
+        x: 0.0
+        y: 0.0
+        z: -0.4194101132105157
+        w: 0.9077968698650279
+
+

@@ -18,8 +18,8 @@ def publish_pose():
     point_list = rospy.get_param('navigation/Locations')
     ingresso_data = None
     for location in point_list:
-        if 'Ingresso' in location:
-            ingresso_data = location['Ingresso']
+        if 'Dock station' in location:
+            ingresso_data = location['Dock station']
             break
 
     if ingresso_data is None:

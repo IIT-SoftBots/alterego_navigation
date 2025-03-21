@@ -110,7 +110,7 @@ class GoForwardAvoid():
                         rospy.loginfo("Goal reached successfully.")
                         break
                     if self.path_length is not None:
-                        if self.path_length < 1.5 and not self.goal_reached_published:
+                        if self.path_length < 0.1 and not self.goal_reached_published:
                             self.goal_reached_pub.publish("SUCCEEDED")
                             self.goal_reached_published = True  # 
                             rospy.loginfo("Goal is within 1 meter.")
