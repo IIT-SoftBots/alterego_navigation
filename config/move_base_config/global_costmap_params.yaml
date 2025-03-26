@@ -44,6 +44,7 @@ global_costmap:
   # Obstacle layer configuration
   obstacle_layer:
     max_obstacle_height: 1.0  # Maximum height of obstacles (meters)
+    min_obstacle_height: 0.1  # Min height for obstacles from this sensor
     observation_sources: laser_scan_sensor  # Sources for obstacle observations
     # LIDAR configuration - adjust topic name if needed
     laser_scan_sensor: {
@@ -52,8 +53,6 @@ global_costmap:
       topic: scan,  # Topic for laser scans
       marking: true,  # Mark obstacles
       clearing: true,  # Clear free space
-      max_obstacle_height: 0.5,  # Max height for obstacles from this sensor
-      min_obstacle_height: 0.05,  # Min height for obstacles from this sensor
       obstacle_range: 5.0,  # Maximum range to mark obstacles
       raytrace_range: 6.0  # Maximum range to clear space
     }

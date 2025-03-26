@@ -108,10 +108,22 @@ class GoForwardAvoid():
 
                 #start moving
                 self.move_base.send_goal(goal)
+                last_clear_time = rospy.Time.now()
                 while not rospy.is_shutdown():
                     state = self.move_base.get_state()
                     if state in [GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.REJECTED]:
                         break
+                    # Clear costmaps every 5 seconds while moving
+                    current_time = rospy.Time.now()
+                    if (current_time - last_clear_time).to_sec() >= 5.0:
+                        try:
+                            clear_costmaps = rospy.ServiceProxy(f"/{self.robot_name}/move_base/clear_costmaps", Empty)
+                            clear_costmaps()
+                            rospy.loginfo("Costmaps cleared during navigation.")
+                            last_clear_time = current_time
+                        except rospy.ServiceException as e:
+                            rospy.logerr(f"Service call failed during navigation: {e}")
+                            
                     # if self.path_length is not None:
                     #     if self.path_length < 0.1 and not self.goal_reached_published:
                     #         # self.goal_reached_pub.publish("SUCCEEDED")

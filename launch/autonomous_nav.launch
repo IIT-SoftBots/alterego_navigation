@@ -95,9 +95,9 @@
             <remap from="map" to="map_with_obstacles"/>
         </node>
 
-        <node name="map_server_obstacle_local" pkg="map_server" type="map_server" args="$(arg map_dir_obs)">
+        <!-- <node name="map_server_obstacle_local" pkg="map_server" type="map_server" args="$(arg map_dir_obs)">
             <remap from="map" to="map_with_obstacles_local"/>
-        </node>
+        </node> -->
 
         <!-- MOVE BASE Node -->
         <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
