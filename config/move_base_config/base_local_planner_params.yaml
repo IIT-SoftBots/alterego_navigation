@@ -11,8 +11,8 @@ TebLocalPlannerROS:
  dt_ref: 0.3
  dt_hysteresis: 0.1
  global_plan_overwrite_orientation: True
- max_global_plan_lookahead_dist: 0.4  # Ridotto da 0.3 per seguire più da vicino il piano globale
- selection_prefer_initial_plan: 0.9  # Aumentato a 0.95 per preferire fortemente il piano globale iniziale
+ max_global_plan_lookahead_dist: 0.2  # Ridotto da 0.3 per seguire più da vicino il piano globale
+ selection_prefer_initial_plan: 0.95  # Aumentato a 0.95 per preferire fortemente il piano globale iniziale
  weight_viapoint: 10.0  # Aumentare per incentivare il seguire i punti del global plan
  global_plan_viapoint_sep: 0.1  # Distanza tra i via-points estratti dal global plan
  via_points_ordered: True  # Forza l'ordine dei via points
