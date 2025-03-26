@@ -30,16 +30,20 @@ class GoForwardAvoid():
         rospy.on_shutdown(self.shutdown)
 
         self._point_list = rospy.get_param('navigation/Locations')
-        self._sleep_timer = rospy.Rate(5.0)
+        self._sleep_timer = rospy.Rate(1.0)
         
         # Aggiungi un subscriber al topic 'target_location'
         rospy.Subscriber('target_location', String, self.target_location_callback)
         rospy.Subscriber("move_base/TebLocalPlannerROS/local_plan", Path, self.path_callback)
+        self.rate = rospy.Rate(1)  # 1 Hz
         
-        self.goal_reached_pub = rospy.Publisher('goal_reached', String, queue_size=10)
+        self.goal_reached_pub = rospy.Publisher('goal_reached', Bool, queue_size=10)
         # Inizializza la variabile target
         self.target = None
         self.first_encounter = True
+        
+        # Numero di volte da pubblicare True quando il goal è raggiunto
+        self.publish_true_count = 50
 
     
     def path_callback(self, msg):
@@ -107,26 +111,31 @@ class GoForwardAvoid():
                 while not rospy.is_shutdown():
                     state = self.move_base.get_state()
                     if state in [GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.REJECTED]:
-                        rospy.loginfo("Goal reached successfully.")
                         break
-                    if self.path_length is not None:
-                        if self.path_length < 0.1 and not self.goal_reached_published:
-                            self.goal_reached_pub.publish("SUCCEEDED")
-                            self.goal_reached_published = True  # 
-                            rospy.loginfo("Goal is within 1 meter.")
+                    # if self.path_length is not None:
+                    #     if self.path_length < 0.1 and not self.goal_reached_published:
+                    #         # self.goal_reached_pub.publish("SUCCEEDED")
+                    #         self.goal_reached_published = True  # 
+                    #         rospy.loginfo("Goal is within 1 meter.")
 
-                    rospy.sleep(1)
+                    self.goal_reached_pub.publish(False)
+                    
+                    self.rate.sleep()
+                    
                 if state == GoalStatus.SUCCEEDED:
-                    self.goal_reached_pub.publish("SUCCEEDED")
-                    rospy.loginfo("Goal reached successfully.")
+                    rospy.loginfo("Goal reached successfully. Publishing True message 30 times...")
+                    # Pubblica True 30 volte con una pausa di 0.1 secondi tra ogni pubblicazione
+                    publish_rate = rospy.Rate(10)  # 10 Hz (0.1 secondi di pausa)
+                    for _ in range(self.publish_true_count):
+                        if rospy.is_shutdown():
+                            break
+                        self.goal_reached_pub.publish(True)
+                        publish_rate.sleep()
+                    
                 else:
                     rospy.loginfo("Failed to reach the goal.")
-                    self.goal_reached_pub.publish("ABORTED")
-                        # Interrompi la riproduzione della bag file
+                    self.goal_reached_pub.publish(False)
 
-
-    
-    
     def shutdown(self):
         rospy.loginfo("Stop")
 

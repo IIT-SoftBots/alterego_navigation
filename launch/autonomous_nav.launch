@@ -116,7 +116,7 @@
             <rosparam file="$(find alterego_navigation)/config/move_base_config/global_costmap_params.yaml" command="load" />
             <rosparam file="$(find alterego_navigation)/config/move_base_config/base_local_planner_params.yaml" command="load" unless="$(arg use_sim_time)"/> <!-- This file will be loaded only on the real robot because in simulation the params are different-->
             <!-- <rosparam file="$(find alterego_navigation)/config/move_base_config/base_local_planner_params_sim.yaml" command="load" if="$(arg use_sim_time)"/> This file will be loaded only on the in simulation when the use_sim_time is true -->
-            <!-- <rosparam file="$(find alterego_navigation)/config/move_base_config/move_base_params.yaml" command="load" /> -->
+            <rosparam file="$(find alterego_navigation)/config/move_base_config/move_base_params.yaml" command="load" />
             <rosparam file="$(find alterego_navigation)/config/move_base_config/global_planner_params.yaml" command="load" />
             
 

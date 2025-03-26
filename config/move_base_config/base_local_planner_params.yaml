@@ -42,6 +42,11 @@ TebLocalPlannerROS:
  yaw_goal_tolerance: 0.1
  free_goal_vel: False
  oscillation_recovery: true
+ oscillation_v_eps: 0.1      # Velocity threshold to detect oscillations
+ oscillation_omega_eps: 0.1  # Angular velocity threshold
+ oscillation_recovery_min_duration: 5.0  # Minimum duration for triggering recovery
+ oscillation_filter_duration: 5.0  # Duration for filtering oscillations
+ 
  recovery_behavior_enabled: true
     
  # Obstacles
@@ -63,12 +68,12 @@ TebLocalPlannerROS:
  optimization_activate: True
  optimization_verbose: False
  penalty_epsilon: 0.1
- weight_max_vel_x: 0
+ weight_max_vel_x: 10
  weight_max_vel_theta: 1
  weight_acc_lim_x: 0.5
  weight_acc_lim_theta: 1
  weight_kinematics_nh: 1000
- weight_kinematics_forward_drive: 100000
+ weight_kinematics_forward_drive: 100
  weight_kinematics_turning_radius: 1
  weight_obstacle: 10
  weight_dynamic_obstacle: 10 # not in use yet
