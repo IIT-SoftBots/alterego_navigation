@@ -17,13 +17,13 @@ from nav_msgs.msg import Path
 import subprocess
 class GoForwardAvoid():
     def __init__(self):
-        
         # Get robot name from environment variable
         self.robot_name = os.getenv('ROBOT_NAME', 'robot_alterego3')
         rospy.init_node('navigation', anonymous=False)
 
         # Inizializzazione e setup
         self.path_length = None
+        self.global_plan_length = None  # Add this to track global plan length
         self.goal_reached_published = False  # Variabile di stato per tenere traccia se il messaggio è già stato pubblicato
 
         # what to do if shut down (e.g. ctrl + C or failure)
@@ -35,6 +35,11 @@ class GoForwardAvoid():
         # Aggiungi un subscriber al topic 'target_location'
         rospy.Subscriber('target_location', String, self.target_location_callback)
         rospy.Subscriber("move_base/TebLocalPlannerROS/local_plan", Path, self.path_callback)
+        
+        # Add subscription to global plan topic
+        global_plan_topic = f"/{self.robot_name}/move_base/TebLocalPlannerROS/global_plan"
+        rospy.Subscriber(global_plan_topic, Path, self.global_plan_callback)
+        
         self.rate = rospy.Rate(1)  # 1 Hz
         
         self.goal_reached_pub = rospy.Publisher('goal_reached', Bool, queue_size=10)
@@ -45,6 +50,10 @@ class GoForwardAvoid():
         # Numero di volte da pubblicare True quando il goal è raggiunto
         self.publish_true_count = 50
 
+    # Add a callback for global plan
+    def global_plan_callback(self, msg):
+        self.global_plan_length = self.calculate_path_length(msg)
+        rospy.logdebug(f"Global plan length: {self.global_plan_length}")
     
     def path_callback(self, msg):
         self.path_length = self.calculate_path_length(msg)
@@ -66,7 +75,6 @@ class GoForwardAvoid():
         self.goal_reached_published = False  # 
         self.path_length = None
 
-
         rospy.loginfo(f"Target location updated to: {self.target}")
         # tell the action client that we want to spin a thread by default
         self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
@@ -85,17 +93,7 @@ class GoForwardAvoid():
                 print(f"Target Position: {position}")
                 print(f"Target Orientation: {orientation}")
                 
-                # Clear costmaps before sending the goal
-                rospy.wait_for_service(f"/{self.robot_name}/move_base/clear_costmaps")
-                try:
-                    clear_costmaps = rospy.ServiceProxy(f"/{self.robot_name}/move_base/clear_costmaps", Empty)
-                    clear_costmaps()
-                    rospy.loginfo("Costmaps cleared successfully.")
-                except rospy.ServiceException as e:
-                    rospy.logerr(f"Service call failed: {e}")
-
-
-                #set up the frame parameters
+                # Setup the goal
                 goal.target_pose.header.frame_id = 'map'
                 goal.target_pose.header.stamp = rospy.Time.now()
                 goal.target_pose.pose.position.x = position['x']
@@ -106,48 +104,77 @@ class GoForwardAvoid():
                 goal.target_pose.pose.orientation.z = orientation['z']
                 goal.target_pose.pose.orientation.w = orientation['w']
 
-                #start moving
-                self.move_base.send_goal(goal)
-                last_clear_time = rospy.Time.now()
-                while not rospy.is_shutdown():
-                    state = self.move_base.get_state()
-                    if state in [GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.REJECTED]:
-                        break
-                    # Clear costmaps every 5 seconds while moving
-                    current_time = rospy.Time.now()
-                    if (current_time - last_clear_time).to_sec() >= 5.0:
-                        try:
-                            clear_costmaps = rospy.ServiceProxy(f"/{self.robot_name}/move_base/clear_costmaps", Empty)
-                            clear_costmaps()
-                            rospy.loginfo("Costmaps cleared during navigation.")
-                            last_clear_time = current_time
-                        except rospy.ServiceException as e:
-                            rospy.logerr(f"Service call failed during navigation: {e}")
-                            
-                    # if self.path_length is not None:
-                    #     if self.path_length < 0.1 and not self.goal_reached_published:
-                    #         # self.goal_reached_pub.publish("SUCCEEDED")
-                    #         self.goal_reached_published = True  # 
-                    #         rospy.loginfo("Goal is within 1 meter.")
+                # Try sending goal until succeeded
+                max_retries = 5  # Maximum number of retries
+                retry_count = 0
+                
+                while retry_count < max_retries and not rospy.is_shutdown():
+                    # Clear costmaps before sending the goal
+                    rospy.wait_for_service(f"/{self.robot_name}/move_base/clear_costmaps")
+                    try:
+                        clear_costmaps = rospy.ServiceProxy(f"/{self.robot_name}/move_base/clear_costmaps", Empty)
+                        clear_costmaps()
+                        rospy.loginfo("Costmaps cleared successfully.")
+                    except rospy.ServiceException as e:
+                        rospy.logerr(f"Service call failed: {e}")
 
-                    self.goal_reached_pub.publish(False)
+                    # Start moving
+                    self.move_base.send_goal(goal)
+                    last_clear_time = rospy.Time.now()
                     
-                    self.rate.sleep()
-                    
-                if state == GoalStatus.SUCCEEDED:
-                    rospy.loginfo("Goal reached successfully. Publishing True message 30 times...")
-                    # Pubblica True 30 volte con una pausa di 0.1 secondi tra ogni pubblicazione
-                    publish_rate = rospy.Rate(10)  # 10 Hz (0.1 secondi di pausa)
-                    for _ in range(self.publish_true_count):
-                        if rospy.is_shutdown():
+                    # Monitor progress
+                    while not rospy.is_shutdown():
+                        state = self.move_base.get_state()
+                        if state in [GoalStatus.SUCCEEDED, GoalStatus.ABORTED, GoalStatus.REJECTED]:
                             break
-                        self.goal_reached_pub.publish(True)
-                        publish_rate.sleep()
+                            
+                        # Clear costmaps every 5 seconds while moving
+                        current_time = rospy.Time.now()
+                        if (current_time - last_clear_time).to_sec() >= 5.0:
+                            try:
+                                clear_costmaps = rospy.ServiceProxy(f"/{self.robot_name}/move_base/clear_costmaps", Empty)
+                                clear_costmaps()
+                                rospy.loginfo("Costmaps cleared during navigation.")
+                                last_clear_time = current_time
+                            except rospy.ServiceException as e:
+                                rospy.logerr(f"Service call failed during navigation: {e}")
+                        
+                        self.goal_reached_pub.publish(False)
+                        self.rate.sleep()
                     
-                else:
-                    rospy.loginfo("Failed to reach the goal.")
+                    # Handle the result
+                    if state == GoalStatus.SUCCEEDED:
+                        # Goal was successful, verify with global plan
+                        if self.global_plan_length is not None and self.global_plan_length < 1.0:
+                            rospy.loginfo(f"Goal confirmed with global plan check. Remaining plan: {self.global_plan_length}m")
+                            rospy.loginfo("Goal reached successfully. Publishing True message...")
+                            # Publish success
+                            publish_rate = rospy.Rate(10)
+                            for _ in range(self.publish_true_count):
+                                if rospy.is_shutdown():
+                                    break
+                                self.goal_reached_pub.publish(True)
+                                publish_rate.sleep()
+                            # Break out of retry loop
+                            break
+                        else:
+                            # False positive
+                            rospy.logwarn(f"Possible false positive! Remaining global plan: {self.global_plan_length}m")
+                            rospy.loginfo("Goal verification failed. Retrying...")
+                            retry_count += 1
+                    else:
+                        # Goal was aborted or rejected, retry
+                        status_text = "ABORTED" if state == GoalStatus.ABORTED else "REJECTED"
+                        rospy.logwarn(f"Goal {status_text}. Retrying... (Attempt {retry_count+1}/{max_retries})")
+                        retry_count += 1
+                        # Wait a bit before retrying
+                        rospy.sleep(1.0)
+                
+                # Check if we exhausted all retries
+                if retry_count >= max_retries:
+                    rospy.logerr(f"Failed to reach goal after {max_retries} attempts.")
                     self.goal_reached_pub.publish(False)
-
+                    
     def shutdown(self):
         rospy.loginfo("Stop")
 
