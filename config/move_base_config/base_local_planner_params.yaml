@@ -38,8 +38,8 @@ TebLocalPlannerROS:
 
  # GoalTolerance
     
- xy_goal_tolerance: 0.2
- yaw_goal_tolerance: 0.1
+ xy_goal_tolerance: 0.1
+ yaw_goal_tolerance: 0.05
  free_goal_vel: False
  oscillation_recovery: true
  oscillation_v_eps: 0.1      # Velocity threshold to detect oscillations
