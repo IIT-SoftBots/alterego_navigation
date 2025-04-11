@@ -2,13 +2,13 @@
 
 <launch>
   <!-- Versione di AlterEgo -->
-  <arg name="AlterEgoVersion" default="3"/>
+  <arg name="AlterEgoVersion" default="2"/>
   <arg name="enable_fixed_hands" default="true" />
   <!-- Utilizzare il tempo di simulazione -->
   <arg name="use_sim_time" default="false"/>
 
   <!-- Abilitare la fotocamera Realsense -->
-  <arg name="realsense" default="true"/>
+  <arg name="realsense" default="false"/>
 
   <!-- Percorso del file URDF -->
   <arg name="urdf_dir" value="$(find alterego_description)/urdf/ego_robot_gazebo.urdf.xacro"/>
