@@ -15,6 +15,8 @@ from tf.transformations import euler_from_quaternion
 import math
 from nav_msgs.msg import Path
 import subprocess
+from geometry_msgs.msg import Pose, Point, Quaternion
+
 class GoForwardAvoid():
     def __init__(self):
         # Get robot name from environment variable
@@ -25,6 +27,7 @@ class GoForwardAvoid():
         self.path_length = None
         self.global_plan_length = None  # Add this to track global plan length
         self.goal_reached_published = False  # Variabile di stato per tenere traccia se il messaggio è già stato pubblicato
+        self.is_on_mostra1 = False  # Track if robot has ever visited Mostra1
 
         # what to do if shut down (e.g. ctrl + C or failure)
         rospy.on_shutdown(self.shutdown)
@@ -39,7 +42,8 @@ class GoForwardAvoid():
         # Add subscription to global plan topic
         global_plan_topic = f"/{self.robot_name}/move_base/TebLocalPlannerROS/global_plan"
         rospy.Subscriber(global_plan_topic, Path, self.global_plan_callback)
-        
+        self.initial_pose_pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped, queue_size=10)
+
         self.rate = rospy.Rate(1)  # 1 Hz
         
         self.goal_reached_pub = rospy.Publisher('goal_reached', Bool, queue_size=10)
@@ -58,7 +62,6 @@ class GoForwardAvoid():
     def path_callback(self, msg):
         self.path_length = self.calculate_path_length(msg)
 
- 
     def calculate_path_length(self, path):
         length = 0.0
         for i in range(len(path.poses) - 1):
@@ -69,6 +72,49 @@ class GoForwardAvoid():
             length += math.sqrt(dx**2 + dy**2)
         return length
 
+    def publish_initial_pose_from_location(self, location_name):
+        mostra_data = None
+        for location in self._point_list:
+            if location_name in location:
+                mostra_data = location[location_name]
+                break
+                
+        if mostra_data is None:
+            rospy.logerr(f"{location_name} not found in point list")
+            return False
+            
+        position = mostra_data['position']
+        orientation = mostra_data['orientation']
+        
+        # Create PoseWithCovarianceStamped message
+        pose_msg = PoseWithCovarianceStamped()
+        pose_msg.header.stamp = rospy.Time.now()
+        pose_msg.header.frame_id = "map"
+        
+        # Set position and orientation
+        pose_msg.pose.pose = Pose(
+            position=Point(position['x'], position['y'], position['z']),
+            orientation=Quaternion(orientation['x'], orientation['y'], orientation['z'], orientation['w'])
+        )
+        
+        # Define covariance matrix
+        pose_msg.pose.covariance = [
+            0.1, 0, 0, 0, 0, 0,
+            0, 0.1, 0, 0, 0, 0,
+            0, 0, 0.1, 0, 0, 0,
+            0, 0, 0, 0.1, 0, 0,
+            0, 0, 0, 0, 0.1, 0,
+            0, 0, 0, 0, 0, 0.1
+        ]
+        
+        # Publish the message
+        self.initial_pose_pub.publish(pose_msg)
+        rospy.loginfo(f"Published initial pose from {location_name}")
+        
+        # Give time for the pose to be processed
+        rospy.sleep(1.0)
+        return True
+
     def target_location_callback(self, msg):
         # Imposta la variabile target con il messaggio ricevuto
         self.target = msg.data
@@ -76,6 +122,14 @@ class GoForwardAvoid():
         self.path_length = None
 
         rospy.loginfo(f"Target location updated to: {self.target}")
+
+        # Check if target is DockStation and if we've visited Mostra1
+        if self.target == "DockStation":
+            if self.is_on_mostra1:
+                rospy.loginfo("Target is DockStation and robot has visited Mostra1. Setting initial pose from Mostra1...")
+                if not self.publish_initial_pose_from_location("Mostra1"):
+                    rospy.logwarn("Failed to set initial pose from Mostra1, continuing with navigation anyway")
+
         # tell the action client that we want to spin a thread by default
         self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
         rospy.loginfo("wait for the action server to come up")
@@ -148,6 +202,15 @@ class GoForwardAvoid():
                         if self.global_plan_length is not None and self.global_plan_length < 1.0:
                             rospy.loginfo(f"Goal confirmed with global plan check. Remaining plan: {self.global_plan_length}m")
                             rospy.loginfo("Goal reached successfully. Publishing True message...")
+                            
+                            # Update Mostra1 visited flag if this target was Mostra1
+                            if self.target == "Mostra1":
+                                self.is_on_mostra1 = True
+                                rospy.loginfo("Recorded successful visit to Mostra1")
+                            elif self.target == "DockStation":
+                                self.is_on_mostra1 = False
+                                rospy.loginfo("Recorded successful visit to DockStation")
+                                
                             # Publish success
                             publish_rate = rospy.Rate(10)
                             for _ in range(self.publish_true_count):
