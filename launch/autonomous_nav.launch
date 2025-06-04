@@ -8,7 +8,7 @@
     <arg name="use_sim_time" default="false" />
 
     <!-- Posizione attuale del robot -->
-    <arg name="location" default="maugeri" />
+    <arg name="location" default="galata" />
 
     <!-- Abilitare la fotocamera Realsense -->
     <arg name="realsense" default="false" />
@@ -23,8 +23,8 @@
     <arg name="urdf_dir" value="$(find alterego_description)/urdf/ego_robot_gazebo.urdf.xacro"/>
 
     <!-- Percorso del file della mappa -->
-    <arg name="map_dir" value="$(find alterego_navigation)/config/$(arg location)_config/maps/test6_cleaned.yaml" />
-    <arg name="map_dir_obs" value="$(find alterego_navigation)/config/$(arg location)_config/maps/test6_cleaned_obs.yaml" />
+    <arg name="map_dir" value="$(find alterego_navigation)/config/$(arg location)_config/maps/galata_3_cleaned.yaml" />
+    <arg name="map_dir_obs" value="$(find alterego_navigation)/config/$(arg location)_config/maps/galata_3_cleaned.yaml" />
 
     <!-- Descrizione del robot -->
     <param name="robot_description"
@@ -33,10 +33,14 @@
         ENABLE_CAMERA:=false
         ENABLE_FLOATING_BASE:=false
         ENABLE_FIXED_BASE:=false
-        ENABLE_LASER:=false
+        ENABLE_LASER:=false  
         ENABLE_REALSENSE:=false
-        ENABLE_FIXED_HANDS:=$(arg enable_fixed_hands)" />
-        
+        ENABLE_FIXED_HANDS:=$(arg enable_fixed_hands)" 
+        unless="$(arg use_sim_time)"/>
+
+    <!-- NB: ENABLE_LASER a false è per NON abilitare il plugin Gazebo, deve stare a false perchè sono i parametri robot descriprion che si mandano per visualizzare il reale che ha l'hardware fisico.
+    Sul robot reale parte questo robot description (use_sim_time=false) mandando questo launch, sul simulatore parte quello in ego_spawn.launch -->   
+    
     <!-- Nodo per pubblicare lo stato del robot -->
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen" unless="$(arg use_sim_time)" />
     
@@ -124,12 +128,12 @@
 
         </node>
 
-        <!-- <node pkg="alterego_navigation" type="nav2points.py" name="navigation" output="screen">
+        <node pkg="alterego_navigation" type="nav2points.py" name="navigation" output="screen">
             <rosparam file="$(find alterego_navigation)/config/$(arg location)_config/points/points.yaml" command="load"/>
             <rosparam file="$(find alterego_navigation)/config/$(arg location)_config/points/keypoints.yaml" command="load"/>
-        </node> -->
+        </node>
 
-        <!-- <node pkg="alterego_navigation" type="initialpose.py" name="initialpose" output="screen"/> -->
+        <node pkg="alterego_navigation" type="initialpose.py" name="initialpose" output="screen"/>
         <!-- <node pkg="alterego_navigation" type="where_are_you_service.py" name="send_key_points" output="screen"/> -->
         <!-- <node pkg="alterego_navigation" type="send_key_points.py" name="send_key_points" output="screen"/> -->
 
