@@ -3,9 +3,9 @@
   "waypoints": [
     {
       "name": "Origine",
-      "x": 11.0,
-      "y": 6.3,
-      "yaw": 108.0
+      "x": 0.0,
+      "y": 0.0,
+      "yaw": 0.0
     },
     {
       "name": "Scrivania",
