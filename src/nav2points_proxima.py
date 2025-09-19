@@ -14,13 +14,17 @@ from time import sleep
 # Third-party
 import requests
 from colorama import Fore
+import tf
 
 # ROS
 import rospy
 from std_msgs.msg import String, Bool
+from geometry_msgs.msg import Pose, PoseArray
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
-from tf.transformations import euler_from_quaternion
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from nav_msgs.msg import OccupancyGrid
 
 
 class Proxima:
@@ -42,11 +46,13 @@ class Proxima:
         self.first_encounter = True
         self.waypoints = []
         self.initial_wp = ""
+        self.robot_need_relocalize = False
 
         # ROS (iniziati dopo init_node)
         self.rate = None
         self.goal_reached_pub = None
         self.navigation_errors_pub = None
+        self.map_pub = None
 
     # ---------------------------
     # Inizializzazione ROS
@@ -56,7 +62,16 @@ class Proxima:
         rospy.Subscriber('target_location', String, self.target_location_callback)
         self.goal_reached_pub = rospy.Publisher('goal_reached', String, queue_size=10)
         self.navigation_errors_pub = rospy.Publisher('navigation_errors', String, queue_size=10)
-
+        rospy.Subscriber('/initialpose', PoseWithCovarianceStamped, self.initialpose_callback)
+        rospy.Subscriber('/map', OccupancyGrid, self.map_latch_callback)
+        self.map_pub = rospy.Publisher('/map', OccupancyGrid, queue_size=1, latch=True)
+        self.waypoints_pub = rospy.Publisher('/waypoints', PoseArray, queue_size=1, latch=True)
+        # TF listener, broadcaster and robot_pose subscriber
+        self.tf_listener = tf.TransformListener()
+        self.tf_broadcaster = tf.TransformBroadcaster()
+        rospy.Subscriber('/robot_pose', PoseStamped, self.get_map_odom_tf)
+ 
+        
     # ---------------------------
     # HTTP helpers
     # ---------------------------
@@ -109,6 +124,7 @@ class Proxima:
         # attesa PreNavigation
         while True:
             status = self.get_request("system-status").json()["content"]["status"]
+            rospy.loginfo("Waiting for PreNavigation... Current status: " + status)
             if status == "PreNavigation":
                 break
             sleep(0.5)
@@ -157,14 +173,66 @@ class Proxima:
             "info": navigation_map_data.get("info", {})
         })
 
+        # Pubblica i waypoints su /waypoints come PoseArray
+        pose_array = PoseArray()
+        pose_array.header.stamp = rospy.Time.now()
+        pose_array.header.frame_id = "map"
+        for wp in self.waypoints:
+            pose = Pose()
+            pose.position.x = wp["x"]
+            pose.position.y = wp["y"]
+            pose.position.z = 0.0
+            quat = quaternion_from_euler(0, 0, wp["yaw"])
+            pose.orientation.x = quat[0]
+            pose.orientation.y = quat[1]
+            pose.orientation.z = quat[2]
+            pose.orientation.w = quat[3]
+            pose_array.poses.append(pose)
+        self.waypoints_pub.publish(pose_array)
+
         rospy.loginfo("Navigation map loaded successfully.")
 
     # ---------------------------
     # Navigazione helpers
     # ---------------------------
-    def localize_robot(self, wp_name):
-        rospy.loginfo(f"Sending Localization to robot at waypoint '{wp_name}'")
-        self.post_request("localize-waypoint", {"map": "navigation_map", "waypoint": wp_name})
+    def localize_robot(self, wp_name, radius=None):
+        
+        # Localization logic:
+        # - If robot is within `radius` meters of waypoint -> localize by waypoint.
+        # - Else -> localize by current pose (call localize-pose).
+        
+        # Find waypoint info (waypoints are stored in meters)
+        wp = next((w for w in (self.waypoints or []) if w.get("name") == wp_name), None)
+        if not wp:
+            rospy.logerr(f"Waypoint '{wp_name}' not found in loaded waypoints")
+            return
+
+        # Current robot pose from robot_status (expected in meters)
+        current_pose = (self.robot_status or {}).get("pose")
+        if not current_pose:
+            # no pose available -> try localize by waypoint as fallback
+            rospy.logwarn("Current pose unavailable, using waypoint localisation")
+            self.post_request("localize-waypoint", {"map": "navigation_map", "waypoint": wp_name})
+            return
+
+        # radius threshold (meters): explicit arg or ROS param or default 0.2 m
+        thresh = float(radius) if radius is not None else 0.2
+
+        dx = current_pose.get("x", 0.0) - float(wp.get("x", 0.0))
+        dy = current_pose.get("y", 0.0) - float(wp.get("y", 0.0))
+        dist = math.hypot(dx, dy)
+
+        if dist <= thresh:
+            rospy.loginfo(f"Within {dist:.2f} m <= {thresh:.2f} m of waypoint '{wp_name}' -> localize by waypoint")
+            self.post_request("localize-waypoint", {"map": "navigation_map", "waypoint": wp_name})
+        else:
+            rospy.loginfo(f"{dist:.2f} m from waypoint '{wp_name}' (> {thresh:.2f}) -> localize by current pose")
+            self.post_request("localize-pose", {
+                "map": "navigation_map",
+                "x": float(current_pose.get("x", 0.0)),
+                "y": float(current_pose.get("y", 0.0)),
+                "yaw": float(current_pose.get("yaw", 0.0))
+            })
 
     def calculate_path_length(self, actual_pose, target_pose):
         dx = target_pose["x"] - actual_pose["x"]
@@ -172,6 +240,17 @@ class Proxima:
         return math.hypot(dx, dy)
 
     def send_mission(self, wp_name):
+        
+        # 1) Rilocalizza il robot
+        if self.robot_need_relocalize == False:
+            # If an external component already localized the robot, skip localization
+            rospy.loginfo(f"External localization present -> skipping relocalize")
+        else:
+            # Else localize robot by either waypoint or current pose.
+            self.localize_robot(self.initial_wp)
+        
+
+        # 2) Inizia la missione verso il waypoint
         rospy.loginfo(f"Sending robot to waypoint '{wp_name}'")
         resp = self.post_request("mission", {
             "action": "start-mission",
@@ -257,8 +336,12 @@ class Proxima:
                 # Aggiorna il waypoint di partenza per la prossima missione
                 self.initial_wp = self.target
 
+
             # Aggiorno lo stato della missione
             self.mission_is_active = False
+
+            # Ho bisogno di rilocalizzarmi
+            self.robot_need_relocalize = True
 
             rospy.loginfo("Mission is now INACTIVE (IDLE)")
 
@@ -292,6 +375,37 @@ class Proxima:
     # ---------------------------
     # Callback ROS
     # ---------------------------
+    
+    def initialpose_callback(self, msg: PoseWithCovarianceStamped):
+        # Callback per la ricezione di un messaggio su /initialpose
+        position = msg.pose.pose.position
+        orientation = msg.pose.pose.orientation
+        _, _, yaw = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
+
+        rospy.loginfo(f"Sending localization in x={position.x:.2f}, y={position.y:.2f}, yaw={math.degrees(yaw):.1f}°")
+        self.post_request("localize-pose", {
+            "map": "navigation_map",
+            "x": position.x,
+            "y": position.y,
+            "yaw": yaw
+        })
+
+        self.robot_need_relocalize = False
+
+    def map_latch_callback(self, msg):
+        if not hasattr(self, "_prev_map"):
+            self._prev_map = None
+        
+        try:
+            for i in range(len(msg.data)):
+                if self._prev_map is None or msg.data[i] != self._prev_map.data[i]:
+                    self._prev_map = msg
+                    self.map_pub.publish(msg)
+                    rospy.loginfo("Republished /map as latched message")
+                    break
+        except Exception as e:
+            rospy.logerr(f"Failed to republish /map: {e}")
+
     def target_location_callback(self, msg: String):
         self.target = msg.data
         rospy.loginfo(f"Received target waypoint: {self.target}")
@@ -306,6 +420,49 @@ class Proxima:
             sleep(1)
 
         self.send_mission(self.target)
+
+    def get_map_odom_tf(self, msg: PoseStamped):
+        """
+        Receive /robot_pose (PoseStamped msg) defined as the base_link position w.r.t. to map frame.
+        Subtracts odom->base_link to it and broadcasts a TF with parent=msg.header.frame_id (or 'map')
+        and child="odom"
+        """
+        try:
+            import tf.transformations as tft
+            import numpy as np
+            
+            # Get transforms as 4x4 matrices
+            (odom_trans, odom_rot) = self.tf_listener.lookupTransform('odom', 'base_link', rospy.Time(0))
+            
+            # Build transformation matrices
+            T_map_base = tft.compose_matrix(
+                translate=[msg.pose.position.x, msg.pose.position.y, msg.pose.position.z],
+                angles=tft.euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y,
+                                                msg.pose.orientation.z, msg.pose.orientation.w])
+            )
+            
+            T_odom_base = tft.compose_matrix(
+                translate=odom_trans,
+                angles=tft.euler_from_quaternion(odom_rot)
+            )
+            
+            # Compute map->odom = map->base * inv(odom->base)
+            T_map_odom = np.dot(T_map_base, tft.inverse_matrix(T_odom_base))
+            
+            # Extract translation and rotation
+            scale, shear, angles, trans, persp = tft.decompose_matrix(T_map_odom)
+            quat = tft.quaternion_from_euler(*angles)
+            
+            self.tf_broadcaster.sendTransform(
+                trans[:3].tolist(),
+                quat.tolist(),
+                msg.header.stamp,
+                'odom',
+                'map'
+            )
+            
+        except Exception as e:
+            rospy.logerr(f"get_map_odom_tf error: {e}")
 
     # ---------------------------
     # Loop principale
