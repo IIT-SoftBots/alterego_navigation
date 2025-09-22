@@ -1,165 +1,70 @@
 #!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import PoseWithCovarianceStamped
+from alterego_msgs.srv import WhereRUService
+from math import sqrt
 
-import rospy
-import yaml
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
-from std_msgs.msg import String
-from math import sqrt, atan2, degrees, acos, cos, sin
-from visualization_msgs.msg import Marker, MarkerArray
 
-from navigation_stack.srv import WhereRUService, WhereRUServiceResponse
-
-class KeyPointSender:
+class WhereAreYouService(Node):
     def __init__(self):
-        rospy.init_node('send_key_points')
+        super().__init__('alterego_where_are_you')
+        self.declare_parameter('navigation_keypoints', None)
+        self.key_points = self.get_parameter('navigation_keypoints').value or []
         self.current_pose = None
-        # what to do if shut down (e.g. ctrl + C o failure)
-        rospy.on_shutdown(self.shutdown)
+        self.create_subscription(PoseWithCovarianceStamped, 'amcl_pose', self.pose_cb, 10)
+        self.service = self.create_service(WhereRUService, 'where_are_you_service', self.handle)
 
-        self.key_points = self.load_key_points(rospy.get_param('navigation/KeyPoints'))
-        self.pub = rospy.Publisher('nearest_point', String, queue_size=10)
-        self.marker_pub = rospy.Publisher('keypoint_markers_array', MarkerArray, queue_size=10)
-        self.service = rospy.Service('/where_are_you_service', WhereRUService, self.handle_whereRU_service)
-        
-        self.threshold = 2  # Soglia di distanza in metri
-        self.angle_threshold = 60.0  # Soglia di angolo in gradi (30 gradi diviso per 2)
-        self.last_published_point = None  # Variabile per memorizzare l'ultimo punto pubblicato
+    def pose_cb(self, msg):
+        self.current_pose = msg
 
-    def handle_whereRU_service(self, req):
-        rospy.loginfo(f"Received request")
-        self.current_pose = rospy.wait_for_message('amcl_pose', PoseWithCovarianceStamped)
-        instruction_point = self.find_nearest_point()
-
-        if instruction_point:
-            rospy.loginfo(f"Nearest point: {instruction_point['name']}")
-            return WhereRUServiceResponse(success=True, instruction_point=instruction_point['name'])
+    def handle(self, request, response):
+        if self.current_pose is None:
+            self.get_logger().warn('No pose received yet.')
+            response.success = False
+            response.instruction_point = ''
+            return response
+        nearest = self.find_nearest_point()
+        if nearest:
+            response.success = True
+            response.instruction_point = nearest['name']
+            self.get_logger().info(f'Nearest point: {nearest["name"]}')
         else:
-            rospy.logwarn("No point found within threshold")
-            return WhereRUServiceResponse(success=False, instruction_point="")
-
-    def load_key_points(self, key_points_param):
-        key_points = []
-        for location in key_points_param:
-            for name, data in location.items():
-                position = data['position']
-                orientation = data['orientation']
-                key_points.append({
-                    'name': name,
-                    'position': position,
-                    'orientation': orientation
-                })
-        return key_points
-
-    def calculate_distance(self, pose1, pose2):
-        dx = pose1.position.x - pose2['x']
-        dy = pose1.position.y - pose2['y']
-        dz = pose1.position.z - pose2['z']
-        return sqrt(dx*dx + dy*dy + dz*dz)
+            response.success = False
+            response.instruction_point = ''
+        return response
 
     def find_nearest_point(self):
-        nearest_point = None
-        min_distance = float('inf')
-        for key_point in self.key_points:
-            distance = self.calculate_distance(self.current_pose.pose.pose, key_point['position'])
-            if distance < min_distance:
-                min_distance = distance
-                nearest_point = key_point
-        return nearest_point
+        min_d = float('inf')
+        best = None
+        try:
+            for loc in self.key_points:
+                for name, data in loc.items():
+                    d = self.distance(self.current_pose.pose.pose.position, data['position'])
+                    if d < min_d:
+                        min_d = d
+                        best = {'name': name}
+        except Exception as e:
+            self.get_logger().error(f'Error parsing key points: {e}')
+        return best
 
-    def quaternion_to_yaw(self, orientation):
-        """Convert a quaternion into a yaw angle (in radians)."""
-        return atan2(2.0 * (orientation['w'] * orientation['z'] + orientation['x'] * orientation['y']),
-                     1.0 - 2.0 * (orientation['y'] * orientation['y'] + orientation['z'] * orientation['z']))
+    def distance(self, p, pos_dict):
+        dx = p.x - pos_dict['x']
+        dy = p.y - pos_dict['y']
+        dz = p.z - pos_dict['z']
+        return sqrt(dx*dx + dy*dy + dz*dz)
 
-    def calculate_angle(self, pose1, pose2, orientation2):
-        # Vettore dal keypoint alla posa del robot
-        dx = pose1.position.x - pose2['x']
-        dy = pose1.position.y - pose2['y']
-        
-        # Direzione del keypoint
-        keypoint_yaw = self.quaternion_to_yaw(orientation2)
-        keypoint_dir_x = cos(keypoint_yaw)
-        keypoint_dir_y = sin(keypoint_yaw)
-        
-        # Prodotto scalare
-        dot_product = dx * keypoint_dir_x + dy * keypoint_dir_y
-        mag_robot = sqrt(dx**2 + dy**2)
-        mag_keypoint = sqrt(keypoint_dir_x**2 + keypoint_dir_y**2)
-        
-        # Calcolo dell'angolo
-        angle = degrees(acos(dot_product / (mag_robot * mag_keypoint)))
-        return angle
 
-    def find_point_within_threshold(self):
-        for key_point in self.key_points:
-            distance = self.calculate_distance(self.current_pose.pose.pose, key_point['position'])
-            angle = self.calculate_angle(self.current_pose.pose.pose, key_point['position'], key_point['orientation'])
-            if distance <= self.threshold and angle <= self.angle_threshold:
-                return key_point
-        return None
+def main():
+    rclpy.init()
+    node = WhereAreYouService()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    node.destroy_node()
+    rclpy.shutdown()
 
-    def normalize_quaternion(self, q):
-        norm = sqrt(q['x']**2 + q['y']**2 + q['z']**2 + q['w']**2)
-        return {
-            'x': q['x'] / norm,
-            'y': q['y'] / norm,
-            'z': q['z'] / norm,
-            'w': q['w'] / norm
-        }
-
-    def create_markers(self):
-        marker_array = MarkerArray()
-        for i, key_point in enumerate(self.key_points):
-            marker = Marker()
-            marker.header.frame_id = "map"
-            marker.header.stamp = rospy.Time.now()
-            marker.ns = "keypoints"
-            marker.id = i
-            marker.type = Marker.ARROW
-            marker.action = Marker.ADD
-            marker.pose.position.x = key_point['position']['x']
-            marker.pose.position.y = key_point['position']['y']
-            marker.pose.position.z = key_point['position']['z']
-            normalized_orientation = self.normalize_quaternion(key_point['orientation'])
-            marker.pose.orientation.x = normalized_orientation['x']
-            marker.pose.orientation.y = normalized_orientation['y']
-            marker.pose.orientation.z = normalized_orientation['z']
-            marker.pose.orientation.w = normalized_orientation['w']
-            marker.scale.x = 1.0  # Lunghezza della freccia
-            marker.scale.y = 0.1  # Larghezza della freccia
-            marker.scale.z = 0.1  # Altezza della freccia
-            marker.color.a = 1.0  # Opacità
-            marker.color.r = 1.0  # Colore rosso
-            marker.color.g = 0.0  # Colore verde
-            marker.color.b = 0.0  # Colore blu
-            marker_array.markers.append(marker)
-        return marker_array
-
-    def run(self):
-        rate = rospy.Rate(1)  # Frequenza di pubblicazione (1 Hz)
-        while not rospy.is_shutdown():
-            self.current_pose = rospy.wait_for_message('amcl_pose', PoseWithCovarianceStamped)
-            point_within_threshold = self.find_point_within_threshold()
-
-            if point_within_threshold and point_within_threshold != self.last_published_point:
-                print("Punto di interesse entro la soglia trovato: " + point_within_threshold['name'])
-                self.pub.publish(point_within_threshold['name'])
-                self.last_published_point = point_within_threshold  # Aggiorna l'ultimo punto pubblicato
-
-            # Pubblica i marker
-            marker_array = self.create_markers()
-            self.marker_pub.publish(marker_array)
-
-            rate.sleep()  # Attendi per mantenere la frequenza di pubblicazione
-
-    def shutdown(self):
-        rospy.loginfo("Stop")
 
 if __name__ == '__main__':
-    try:
-        sender = KeyPointSender()
-        sender.run()
-        rospy.spin()
-
-    except rospy.ROSInterruptException:
-        rospy.loginfo("Exception thrown")
+    main()
