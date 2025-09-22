@@ -29,8 +29,12 @@ from nav_msgs.msg import OccupancyGrid
 
 class Proxima:
     def __init__(self):
+
+        self.credentials = {}
+        self.load_credentials()
+
         # Config backend
-        self.backend_url = "http://127.0.0.1:1984/"
+        self.backend_url = f"http://127.0.0.1:{self.credentials.get('BACKEND_API_PORT')}/"
         self.auth_header = ""
         self.headers = {"Authorization": self.auth_header}
 
@@ -71,12 +75,28 @@ class Proxima:
         self.tf_broadcaster = tf.TransformBroadcaster()
         rospy.Subscriber('/robot_pose', PoseStamped, self.get_map_odom_tf)
  
+
+    def load_credentials(self):
         
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        filename = os.path.join(script_dir, "..", "license", ".env")
+        
+        if not os.path.exists(filename):
+            return
+        with open(filename) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                key, value = line.split("=", 1)
+                self.credentials[key] = value
+                
+
     # ---------------------------
     # HTTP helpers
     # ---------------------------
     def login(self):
-        resp = requests.post(self.backend_url + "login", json={"username": "admin", "password": "admin"})
+        resp = requests.post(self.backend_url + "login", json={"username": self.credentials.get("BACKEND_USERNAME"), "password": self.credentials.get("BACKEND_PASSWORD")})
         if resp.ok:
             self.auth_header = resp.content.decode("utf-8")
             self.headers = {"Authorization": self.auth_header}
@@ -298,7 +318,9 @@ class Proxima:
                 self.mission_to_be_aborted = True
             elif error == "LASER_ERROR":
                 self.mission_to_be_aborted = True
-            elif error in ("LOCALIZATION_JUMP", "LOCALIZATION_TIMEOUT"):
+            elif error in "LOCALIZATION_JUMP":
+                self.mission_to_be_aborted = True
+            elif error in "LOCALIZATION_TIMEOUT":
                 self.localize_robot(self.initial_wp)
             elif error == "ROBOT_OUT_OF_MAP":
                 self.mission_to_be_aborted = True
