@@ -82,7 +82,9 @@
 
         <!--- Run lidar node -->
         <node name="lidar"          pkg="rplidar_ros"  type="rplidarNode" output="screen" unless="$(arg use_sim_time)"> <!-- This file will be loaded only on the real robot because in simulation the lidar is a plugin-->
-            <param name="serial_baudrate"     type="int"    value="115200"/>
+            <!-- the correct "serial_baudrate" and "serial_port" are defined in robot_configuration.yaml -->
+            <!-- <param name="serial_baudrate" type="int" value="115200"/> -->
+            <!-- <param name="serial_port" type="string" value="/dev/ttyUSB0"/> -->
             <param name="frame_id"            type="string" value="scan"/>
             <param name="inverted"            type="bool"   value="false"/>
             <param name="angle_compensate"    type="bool"   value="true"/>
