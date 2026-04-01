@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import math
+import numpy as np
 import json
 import random
 import inspect
@@ -68,7 +69,7 @@ class Proxima:
         self.navigation_errors_pub = rospy.Publisher('navigation_errors', String, queue_size=10)
         rospy.Subscriber('/initialpose', PoseWithCovarianceStamped, self.initialpose_callback)
         rospy.Subscriber('/map', OccupancyGrid, self.map_latch_callback)
-        self.map_pub = rospy.Publisher('/map', OccupancyGrid, queue_size=1, latch=True)
+        self.map_pub = rospy.Publisher(f"/{self.robot_name}/map", OccupancyGrid, queue_size=1, latch=True)
         self.waypoints_pub = rospy.Publisher('/waypoints', PoseArray, queue_size=1, latch=True)
         # TF listener, broadcaster and robot_pose subscriber
         self.tf_listener = tf.TransformListener()
@@ -120,7 +121,7 @@ class Proxima:
 
     def post_request(self, endpoint, data):
         resp = requests.post(self.backend_url + endpoint, json=data, headers=self.headers)
-        #self.print_response("POST", endpoint, resp, data)
+        self.print_response("POST", endpoint, resp, data)
         return resp
 
     def print_response(self, method, endpoint, response, data=None):
@@ -128,6 +129,21 @@ class Proxima:
         msg += (str(data) if data else "")
         msg += " : " + response.content.decode("utf-8")
         print(msg)
+        
+    def status_transition(self, new_status):
+        while True:
+            resp = self.post_request("system-status", {"status": new_status})
+            if resp.ok:
+                break
+            rospy.logwarn(f"System status POST failed ({resp.status_code}); retrying...")
+            sleep(0.5)
+
+        while True:
+            status = self.get_request("system-status").json()["content"]["status"]
+            rospy.loginfo(f"Waiting for {new_status}... Current status: " + status)
+            if status == new_status:
+                break
+            sleep(0.5)
 
     # ---------------------------
     # Setup logico (backend + mappa)
@@ -136,26 +152,28 @@ class Proxima:
         # 1) Login
         if not self.login():
             sys.exit(1)
-
-        # 2) Transizioni di stato
-        self.post_request("system-status", {"status": "Idle"})
-        sleep(1)
-        self.post_request("system-status", {"status": "PreNavigation"})
-        # attesa PreNavigation
-        while True:
-            status = self.get_request("system-status").json()["content"]["status"]
-            rospy.loginfo("Waiting for PreNavigation... Current status: " + status)
-            if status == "PreNavigation":
-                break
-            sleep(0.5)
-
-        # 3) Caricamento mappa da parametro ROS
+        
+        # 2) Transizioni di stato Idle->PreMapping (carica la mappa sulla Gui scelta dal dal launcher proxima_nav_launch)
+        self.status_transition("Idle")
+        self.status_transition("PreMapping")
+        
+        # 3) Caricamento mappa da parametro ROS launch file
         map_file = rospy.get_param('/map_file', '')
         self.initial_wp = rospy.get_param('/initial_waypoint', '')
         rospy.loginfo(f"Loading navigation map from file: {map_file}")
         self.load_navigation_map(map_file)
 
-        # 4) Modalità navigazione e localizzazione iniziale
+        # 4) Transizioni di stato (PreMapping)->Idle->PreNavigation 
+        self.status_transition("Idle")
+        self.status_transition("PreNavigation")
+        
+        # 3) Caricamento mappa da parametro ROS
+        # map_file = rospy.get_param('/map_file', '')
+        # self.initial_wp = rospy.get_param('/initial_waypoint', '')
+        # rospy.loginfo(f"Loading navigation map from file: {map_file}")
+        # self.load_navigation_map(map_file)
+
+        # 5) Modalità navigazione e localizzazione iniziale
         self.post_request("navigation-mode", {"type": "auto"})
         sleep(0.5)
         if self.initial_wp:
@@ -173,27 +191,65 @@ class Proxima:
             rospy.logerr(f"Invalid JSON format in navigation map file: {map_file}")
             sys.exit(1)
 
-        # Adattamento coordinate in metri, yaw in radianti
-        info = navigation_map_data.get("info", {})
-        resolution = info.get("resolution", 1.0)
-        height = info.get("size", {}).get("height", 0.0)
-
         self.waypoints = []
         for wp in navigation_map_data.get("waypoints", []):
-            wp["x"] = wp.get("x", 0.0) * resolution
-            # valore assoluto della differenza dall’origine in alto: |height - y|
-            wp["y"] = abs(height - wp.get("y", 0.0)) * resolution
-            wp["yaw"] = math.radians(-wp.get("yaw", 0.0))
             self.waypoints.append(wp)
 
         # Invia la mappa adattata
-        self.post_request("navigation-map", {
+        resp = self.post_request("navigation-map", {
             "map": navigation_map_data.get("map"),
-            "waypoints": self.waypoints,
-            "info": navigation_map_data.get("info", {})
+            "x": navigation_map_data.get("x", 0.0),
+            "y": navigation_map_data.get("y", 0.0),
+            "yaw": navigation_map_data.get("yaw", 0.0),
+            "waypoints": navigation_map_data.get("waypoints", []),
+            "map_info": navigation_map_data.get("map_info", {}),
+            "areas": navigation_map_data.get("areas", [])
         })
+        
+        if resp.status_code == 200:
+    
+            rospy.loginfo("Navigation map loaded successfully.")
+        else:
+            rospy.logerr("Failed to upload Navigation map.")
+            rospy.logerr(resp.status_code)
+            
+    # ------------------------------------------------------------------------
+    #  RVIZ 
+    # ------------------------------------------------------------------------
+    
+    # VISUALIZZARE WAIPONTS --------------------------------------------------      
+        
+        # Pubblico i waypoints su /waypoints come PoseArray.
+        # Pubblico i waypoint rispetto al frame map. 
+        # NB: Nel file .json della mappa i wp sono espressi in world, dal file recupero x,y,yaw (posizione del frame map rispetto al world) e porto i wp espressi in map.
+        
+        # posa di MAP rispetto a WORLD (dal file mapppa json)
+        map_x = float(navigation_map_data.get("x", 0.0))
+        map_y = float(navigation_map_data.get("y", 0.0))
+        map_yaw = float(navigation_map_data.get("yaw", 0.0))
+        
+        # T_w_map (map rispetto world) e sua inversa T_map_w
+        T_w_map = self._se2(map_x, map_y, map_yaw)
+        T_map_w = np.linalg.inv(T_w_map)
+        
+        # Converte ogni waypoint da world a map
+        wp_world = self.waypoints
+        wp_map = []
+        for wp in wp_world:
+            T_w_wp = self._se2(float(wp["x"]), float(wp["y"]), float(wp["yaw"]))
+            T_map_wp = T_map_w @ T_w_wp
 
-        # Pubblica i waypoints su /waypoints come PoseArray
+            wp_map.append({
+                **wp,
+                "x": float(T_map_wp[0, 2]),
+                "y": float(T_map_wp[1, 2]),
+                "yaw": float(self._yaw_from_T(T_map_wp))
+            })
+    
+        # Salva waypoints convertiti (ora in MAP)
+        self.waypoints = wp_map
+        
+        # Pubblica in frame map
         pose_array = PoseArray()
         pose_array.header.stamp = rospy.Time.now()
         pose_array.header.frame_id = "map"
@@ -202,16 +258,74 @@ class Proxima:
             pose.position.x = wp["x"]
             pose.position.y = wp["y"]
             pose.position.z = 0.0
-            quat = quaternion_from_euler(0, 0, wp["yaw"])
+            quat = quaternion_from_euler(0.0, 0.0, wp["yaw"])
             pose.orientation.x = quat[0]
             pose.orientation.y = quat[1]
             pose.orientation.z = quat[2]
             pose.orientation.w = quat[3]
             pose_array.poses.append(pose)
+
         self.waypoints_pub.publish(pose_array)
+        
+    def _se2(self, x, y, yaw):
+        c = math.cos(yaw)
+        s = math.sin(yaw)
+        return np.array([
+            [c, -s, x],
+            [s,  c, y],
+            [0,  0, 1]
+        ], dtype=float)
 
-        rospy.loginfo("Navigation map loaded successfully.")
+    def _yaw_from_T(self, T):
+        return math.atan2(T[1, 0], T[0, 0])
+    # --------------------------------------------------------------------------
+    # VISUALIZZARE FRAME MAP-->ODOM (TO FIX serve API)  
 
+    # Non posso usare questa funzione perchè il robot lato nostro crea già il TF odom-->base_link, e se pubblico anche map->base_link su rviz vedo sparire e riapparire il frame perchè ha duediversi parent.    il robot pubblicherà direttamente map->odom, questa funzione potrà essere riabilitata per pubblicare direttamente map->odom.
+    def map_pose(self): 
+        """
+        GET /map-pose
+        Ritorna:
+          - pose: x, y, yaw (map pose: base_link wrt map)
+        In caso di errore ritorna (None, None)
+        """
+        try:
+            resp = self.get_request("map-pose")
+            if not resp.ok:
+                rospy.logwarn(f"GET map-pose failed ({resp.status_code})")
+                return None, None
+
+            content = resp.json().get("content", {})
+            pose = content.get("pose", {})
+
+            if not pose:
+                rospy.logwarn("map-pose response without pose")
+                return None
+
+            return {
+                "x": float(pose.get("x", 0.0)),
+                "y": float(pose.get("y", 0.0)),
+                "yaw": float(pose.get("yaw", 0.0)),
+            }
+
+        except Exception as e:
+            rospy.logerr(f"Failed to get map-pose: {e}")
+            return None, None
+
+    def publish_map_tf(self):
+        pose = self.map_pose()
+        if not pose:
+            return
+
+        quat = quaternion_from_euler(0.0, 0.0, pose["yaw"])
+        self.tf_broadcaster.sendTransform(
+            (pose["x"], pose["y"], 0.0),   # translation
+            quat,                          # rotation
+            rospy.Time.now(),
+            "base_link",                   # child
+            "map"                          # parent
+        )
+        
     # ---------------------------
     # Navigazione helpers
     # ---------------------------
@@ -451,7 +565,6 @@ class Proxima:
         """
         try:
             import tf.transformations as tft
-            import numpy as np
             
             # Get transforms as 4x4 matrices
             (odom_trans, odom_rot) = self.tf_listener.lookupTransform('odom', 'base_link', rospy.Time(0))
@@ -491,8 +604,8 @@ class Proxima:
     # ---------------------------
     def main_loop(self):
         while not rospy.is_shutdown():
+            # self.publish_map_tf()  # Pubblica continuamente la TF map->base_link (per ora, in futuro pubblicherà direttamente map-->odom)
             self.robot_status = self.get_request("robot-status").json().get("content", {})
-
             # Errori di stato
             self.handle_status_errors()
 
