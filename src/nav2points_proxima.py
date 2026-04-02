@@ -23,6 +23,9 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import Marker, MarkerArray
 
+# Todo: 
+# 1) Failed to send custom waypoint mission: 500 (/custom-waypoint-mission) -> non va a buon fine se mando una missione custom, sembra un problema del backend che non accetta la richiesta, da investigare
+# 2) Gestione errori: se ricevo errori di navigazione, oltre a pubblicarli su /navigation_errors, potrei voler abortire la missione (es. PATH_NOT_FOUND, LASER_ERROR, LOCALIZATION_JUMP, ROBOT_OUT_OF_MAP) o rilocalizzare (es. LOCALIZATION_TIMEOUT) a seconda del tipo di errore. Da implementare nella funzione handle_status_errors() che viene chiamata ad ogni aggiornamento di stato.  
 
 class Proxima:
     def __init__(self):
@@ -44,6 +47,8 @@ class Proxima:
         self.mission_to_be_aborted = False
         self.target = None
         self.target_wp = None
+        self.target_type = None          # "waypoint" oppure "custom_pose"
+        self.initial_custom_pose = None  # ultima posa custom raggiunta
         self.first_encounter = True
         self.waypoints = []
         self.waypoints_map = [] # usati per visualizzazione RViz no backend
@@ -72,7 +77,7 @@ class Proxima:
         self.goal_reached_pub = rospy.Publisher('goal_reached', String, queue_size=10)
         self.navigation_errors_pub = rospy.Publisher('navigation_errors', String, queue_size=10)
         rospy.Subscriber('/initialpose', PoseWithCovarianceStamped, self.initialpose_callback) # per RViz 2D Pose Estimate
-        # rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.targetpose_callback) # per RViz 2D Nav Goal TO DO
+        rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.targetpose_callback) # per RViz 2D Nav Goal TO DO
         rospy.Subscriber('/map', OccupancyGrid, self.map_latch_callback)
         self.map_pub = rospy.Publisher(f"/{self.robot_name}/map", OccupancyGrid, queue_size=1, latch=True)
         self.waypoints_pub = rospy.Publisher('/waypoints', PoseArray, queue_size=1, latch=True)
@@ -238,7 +243,9 @@ class Proxima:
     # ------------------------------------------------------------------------
     # RVIZ
     # ------------------------------------------------------------------------
-    # Usefull transformation functions to convert points from world frame to map frame.
+    # Usefull transformation functions to convert points from world frame to map frame and viceversa. 
+    # Backend works with world frame, but Rviz visualizes everything in map frame, so I need to convert the waypoints and the global path points from world to map before publishing them, and also convert back to world if I receive a new target or initial pose from RViz. 
+    # The transformation is done using the T_map_w matrix (and its inverse T_w_map) that I compute from the map origin (x,y,yaw) specified in the JSON file.
     
     def world_point_to_map(self, x_w, y_w, yaw_w=0.0):
         """
@@ -251,6 +258,19 @@ class Proxima:
             float(T_map_p[0, 2]),
             float(T_map_p[1, 2]),
             float(self._yaw_from_T(T_map_p))
+        )
+    
+    def map_point_to_world(self, x_m, y_m, yaw_m=0.0):
+        """
+        Converte una posa da map a world usando T_w_map.
+        Ritorna x, y, yaw nel frame world.
+        """
+        T_map_p = self._se2(float(x_m), float(y_m), float(yaw_m))
+        T_w_p = self.T_w_map @ T_map_p
+        return (
+            float(T_w_p[0, 2]),
+            float(T_w_p[1, 2]),
+            float(self._yaw_from_T(T_w_p))
         )
     
     def _se2(self, x, y, yaw):
@@ -516,6 +536,37 @@ class Proxima:
                 "y": float(current_pose.get("y", 0.0)),
                 "yaw": float(current_pose.get("yaw", 0.0))
             })
+            
+    def relocalize_robot_before_mission(self):
+        """
+        Preserva la logica esistente:
+        - se l'ultima posizione valida è un waypoint, usa localize_robot(initial_wp)
+        - se l'ultima posizione valida è una posa custom, usa localize-pose
+        """
+        if self.robot_need_relocalize == False:
+            rospy.loginfo("External localization present -> skipping relocalize")
+            return
+
+        if self.initial_custom_pose is not None:
+            rospy.loginfo(
+                "Relocalizing from last custom pose: "
+                f"x={self.initial_custom_pose['x']:.2f}, "
+                f"y={self.initial_custom_pose['y']:.2f}, "
+                f"yaw={math.degrees(self.initial_custom_pose['yaw']):.1f}°"
+            )
+            self.post_request("localize-pose", {
+                "map": "navigation_map",
+                "x": float(self.initial_custom_pose["x"]),
+                "y": float(self.initial_custom_pose["y"]),
+                "yaw": float(self.initial_custom_pose["yaw"])
+            })
+            return
+
+        if self.initial_wp:
+            self.localize_robot(self.initial_wp)
+            return
+
+        rospy.logwarn("No initial waypoint or custom pose available for relocalization")
 
     def calculate_path_length(self, actual_pose, target_pose):
         dx = target_pose["x"] - actual_pose["x"]
@@ -523,15 +574,9 @@ class Proxima:
         return math.hypot(dx, dy)
 
     def send_mission(self, wp_name):
-        
+
         # 1) Rilocalizza il robot
-        if self.robot_need_relocalize == False:
-            # If an external component already localized the robot, skip localization
-            rospy.loginfo(f"External localization present -> skipping relocalize")
-        else:
-            # Else localize robot by either waypoint or current pose.
-            self.localize_robot(self.initial_wp)
-        
+        self.relocalize_robot_before_mission()
 
         # 2) Inizia la missione verso il waypoint
         rospy.loginfo(f"Sending robot to waypoint '{wp_name}'")
@@ -542,6 +587,8 @@ class Proxima:
         })
 
         if resp.status_code == 200:
+            self.target_type = "waypoint"
+            self.target = wp_name
             self.target_wp = next((w for w in self.waypoints if w["name"] == wp_name), None)
         else:
             self.mission_to_be_aborted = True
@@ -557,6 +604,36 @@ class Proxima:
             self.goal_reached_pub.publish("ABORTED")
             
             self.mission_to_be_aborted = False
+            
+    def send_custom_mission(self, x, y, yaw):
+        # stessa logica pre-missione di send_mission
+        self.relocalize_robot_before_mission()
+
+        rospy.loginfo(
+            f"Sending custom mission to x={x:.2f}, y={y:.2f}, yaw={math.degrees(yaw):.1f}°"
+        )
+
+        resp = self.post_request("custom-waypoint-mission", {
+            "x": float(x),
+            "y": float(y),
+            "yaw": float(yaw),
+            "map": "navigation_map"
+        })
+
+        if resp.status_code == 200:
+            self.target_type = "custom_pose"
+            self.target = "custom_pose"
+            self.target_wp = {
+                "x": float(x),
+                "y": float(y),
+                "yaw": float(yaw),
+                "name": "custom_pose"
+            }
+            return True
+
+        rospy.logerr(f"Failed to send custom waypoint mission: {resp.status_code}")
+        self.mission_to_be_aborted = True
+        return False
 
     def stop_mission(self):
         if self.mission_is_active == True:
@@ -587,23 +664,22 @@ class Proxima:
             elif error == "LOCALIZATION_JUMP":
                 self.mission_to_be_aborted = True
             elif error == "LOCALIZATION_TIMEOUT":
-                self.localize_robot(self.initial_wp)
+                self.relocalize_robot_before_mission()
             elif error == "ROBOT_OUT_OF_MAP":
                 self.mission_to_be_aborted = True
             elif error == "ROBOT_STUCK":
                 pass
             # Pubblica gli errori di navigazione quando si verificano
             self.navigation_errors_pub.publish(error)
-
     def update_mission_status(self):
         # Salva lo stato precedente
         if not hasattr(self, "_prev_status"):
             self._prev_status = self.robot_status.get("status", None)
             return
-
+    
         current_status = self.robot_status.get("status", None)
         prev_status = self._prev_status
-
+    
         if current_status == "RUN":
             if self.mission_is_active == False:
                 # Notifica inzio nuova missione
@@ -611,7 +687,7 @@ class Proxima:
             
             # Imposta sempre la missione attiva nello stato RUN
             self.mission_is_active = True
-
+    
         # Transizione da RUN a IDLE
         elif prev_status == "RUN" and current_status == "IDLE":
             
@@ -620,19 +696,32 @@ class Proxima:
                 rospy.loginfo("Target Reached.")
                 # Pubblica goal_reached
                 self.goal_reached_pub.publish("SUCCEEDED")
-
-                # Aggiorna il waypoint di partenza per la prossima missione
-                self.initial_wp = self.target
-
-
+    
+                # Caso classico: missione verso waypoint
+                if self.target_type == "waypoint":
+                    self.initial_wp = self.target
+                    self.initial_custom_pose = None
+    
+                # Nuovo caso: missione verso posa custom
+                elif self.target_type == "custom_pose" and self.target_wp is not None:
+                    self.initial_custom_pose = {
+                        "x": float(self.target_wp["x"]),
+                        "y": float(self.target_wp["y"]),
+                        "yaw": float(self.target_wp["yaw"])
+                    }
+    
+                # Fallback conservativo: preserva la vecchia logica
+                elif self.target is not None:
+                    self.initial_wp = self.target
+    
             # Aggiorno lo stato della missione
             self.mission_is_active = False
-
+    
             # Ho bisogno di rilocalizzarmi
             self.robot_need_relocalize = True
-
+    
             rospy.loginfo("Mission is now INACTIVE (IDLE)")
-
+    
         # Gestione abort mission            
         self.check_abort_mission()
         
@@ -664,30 +753,66 @@ class Proxima:
     # ---------------------------
     # Callback ROS
     # ---------------------------
-    
+
     def initialpose_callback(self, msg: PoseWithCovarianceStamped):
-        # Callback per la ricezione di un messaggio su /initialpose
+        # callback per la ricezione di un messaggio su /initialpose (2D Pose Estimate di RViz)
         position = msg.pose.pose.position
         orientation = msg.pose.pose.orientation
-        _, _, yaw = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
+        _, _, yaw_map = euler_from_quaternion([
+            orientation.x, orientation.y, orientation.z, orientation.w
+        ])
 
-        rospy.loginfo(f"Sending localization in x={position.x:.2f}, y={position.y:.2f}, yaw={math.degrees(yaw):.1f}°")
+        x_w, y_w, yaw_w = self.map_point_to_world(position.x, position.y, yaw_map)
+
+        rospy.loginfo(
+            f"Sending localization in WORLD x={x_w:.2f}, y={y_w:.2f}, yaw={math.degrees(yaw_w):.1f}°"
+        )
+
         self.post_request("localize-pose", {
             "map": "navigation_map",
-            "x": position.x,
-            "y": position.y,
-            "yaw": yaw
+            "x": x_w,
+            "y": y_w,
+            "yaw": yaw_w
         })
 
         self.robot_need_relocalize = False
-    
-    # def targetpose_callback(self, msg: PoseStamped):
-    #     # Callback per la ricezione di un messaggio su /move_base_simple/goal
-    #     position = msg.pose.position
-    #     orientation = msg.pose.orientation
-    #     _, _, yaw = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
 
-    #     rospy.loginfo(f"Received target pose from RViz: x={position.x:.2f}, y={position.y:.2f}, yaw={math.degrees(yaw):.1f}°")
+    def targetpose_callback(self, msg: PoseStamped):
+        # Callback per la ricezione di un messaggio su /move_base_simple/goal
+        # RViz pubblica la posa nel frame map
+
+        position = msg.pose.position
+        orientation = msg.pose.orientation
+        _, _, yaw_map = euler_from_quaternion([
+            orientation.x, orientation.y, orientation.z, orientation.w
+        ])
+
+        rospy.loginfo(
+            f"Received target pose from RViz in map frame: "
+            f"x={position.x:.2f}, y={position.y:.2f}, yaw={math.degrees(yaw_map):.1f}°"
+        )
+
+        self.goal_reached_published = False
+        self.path_length = None
+        self.target = None
+        self.target_wp = None
+        self.target_type = None
+
+        # Controlla se c'è già una missione attiva e la termina
+        if self.mission_is_active:
+            self.mission_to_be_aborted = True
+            self.check_abort_mission()
+            sleep(1)
+
+        # Converte la posa da map a world prima di mandarla al backend
+        x_w, y_w, yaw_w = self.map_point_to_world(position.x, position.y, yaw_map)
+
+        rospy.loginfo(
+            f"Converted RViz goal map->world: "
+            f"x={x_w:.2f}, y={y_w:.2f}, yaw={math.degrees(yaw_w):.1f}°"
+        )
+
+        self.send_custom_mission(x_w, y_w, yaw_w)
     
     def map_latch_callback(self, msg):
         if not hasattr(self, "_prev_map"):
@@ -716,7 +841,7 @@ class Proxima:
 
         self.goal_reached_published = False
         self.path_length = None
-        
+        self.target_type = None
         # Controlla se c'è già una missione attiva e la termina
         if self.mission_is_active:
             self.mission_to_be_aborted = True
