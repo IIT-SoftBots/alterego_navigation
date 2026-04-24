@@ -58,6 +58,10 @@ class Proxima:
         self.map_y = 0.0
         self.map_yaw = 0.0
         self.T_map_w = np.eye(3, dtype=float)
+        self.global_path_cached = False
+        self.last_global_path_attempt_ts = 0.0
+        self.global_path_retry_sec = 1.0
+        self.active_navigation_errors = set()
 
         # ROS (iniziati dopo init_node)
         self.rate = None
@@ -140,7 +144,7 @@ class Proxima:
 
     def post_request(self, endpoint, data):
         resp = requests.post(self.backend_url + endpoint, json=data, headers=self.headers)
-        self.print_response("POST", endpoint, resp, data)
+        # self.print_response("POST", endpoint, resp, data)
         return resp
 
     def print_response(self, method, endpoint, response, data=None):
@@ -409,9 +413,7 @@ class Proxima:
             rospy.logerr(f"Failed to get global-path: {e}")
             return None
     
-    def publish_global_path(self):
-        path_points = self.global_path()
-        rospy.loginfo(f"Global path points: {path_points}")
+    def publish_global_path(self, path_points):
         if not path_points:
             return
 
@@ -440,9 +442,39 @@ class Proxima:
             p.orientation.w = 1.0
             marker.points.append(p.position)
 
-            rospy.loginfo(f"[global_path map] {i}: x={x_m:.3f}, y={y_m:.3f}")
-
         self.global_path_pub.publish(marker)
+
+    def try_update_global_path(self, force=False):
+        if self.target_wp is None:
+            return
+
+        if self.global_path_cached and not force:
+            return
+
+        now = time.time()
+        if not force and (now - self.last_global_path_attempt_ts) < self.global_path_retry_sec:
+            return
+
+        self.last_global_path_attempt_ts = now
+        path_points = self.global_path()
+        if not path_points:
+            return
+
+        self.publish_global_path(path_points)
+        self.global_path_cached = True
+        rospy.loginfo(f"Global path cached with {len(path_points)} points")
+
+    def clear_global_path(self):
+        marker = Marker()
+        marker.header.frame_id = "map"
+        marker.header.stamp = rospy.Time.now()
+        marker.ns = "global_path"
+        marker.id = 0
+        marker.action = Marker.DELETE
+        self.global_path_pub.publish(marker)
+        self.global_path_cached = False
+        self.last_global_path_attempt_ts = 0.0
+        rospy.loginfo("Cleared /mission_control/global_path")
     
 
     # --------------------------------------------------------------------------
@@ -590,6 +622,9 @@ class Proxima:
             self.target_type = "waypoint"
             self.target = wp_name
             self.target_wp = next((w for w in self.waypoints if w["name"] == wp_name), None)
+            self.global_path_cached = False
+            self.last_global_path_attempt_ts = 0.0
+            self.try_update_global_path(force=True)
         else:
             self.mission_to_be_aborted = True
 
@@ -629,6 +664,9 @@ class Proxima:
                 "yaw": float(yaw),
                 "name": "custom_pose"
             }
+            self.global_path_cached = False
+            self.last_global_path_attempt_ts = 0.0
+            self.try_update_global_path(force=True)
             return True
 
         rospy.logerr(f"Failed to send custom waypoint mission: {resp.status_code}")
@@ -649,11 +687,27 @@ class Proxima:
     # Status Update
     # ---------------------------
     def handle_status_errors(self):
-        errors = (self.robot_status or {}).get("errors", [])
-        if not errors:
+        status = (self.robot_status or {}).get("status", None)
+        if status != "ERROR":
+            self.active_navigation_errors.clear()
             return
 
+        errors = (self.robot_status or {}).get("errors", [])
+        if not errors:
+            self.active_navigation_errors.clear()
+            return
+
+        current_errors = set(errors)
+        new_errors = []
+        seen_in_cycle = set()
         for error in errors:
+            if error in seen_in_cycle:
+                continue
+            seen_in_cycle.add(error)
+            if error not in self.active_navigation_errors:
+                new_errors.append(error)
+
+        for error in new_errors:
             rospy.logerr(f"Navigation error: {error}")
             self.navigation_errors_pub.publish(error)
 
@@ -668,9 +722,12 @@ class Proxima:
             elif error == "ROBOT_OUT_OF_MAP":
                 self.mission_to_be_aborted = True
             elif error == "ROBOT_STUCK":
-                pass
-            # Pubblica gli errori di navigazione quando si verificano
-            self.navigation_errors_pub.publish(error)
+                rospy.logwarn("ROBOT_STUCK detected: invalidating global path cache")
+                self.global_path_cached = False
+                self.last_global_path_attempt_ts = 0.0
+
+        self.active_navigation_errors = current_errors
+            
     def update_mission_status(self):
         # Salva lo stato precedente
         if not hasattr(self, "_prev_status"):
@@ -680,12 +737,28 @@ class Proxima:
         current_status = self.robot_status.get("status", None)
         prev_status = self._prev_status
     
-        if current_status == "RUN":
+        if prev_status == "ERROR" and current_status == "RUN":
+            rospy.loginfo("Mission resumed (ERROR -> RUN)")
+            self.mission_is_active = True
+
+            # Refresh esplicito del path dopo eventuale replanning
+            if self.target_wp is not None:
+                self.global_path_cached = False
+                self.last_global_path_attempt_ts = 0.0
+                self.try_update_global_path(force=True)
+
+        elif current_status == "RUN":
             if self.mission_is_active == False:
                 # Notifica inzio nuova missione
                 rospy.loginfo("Mission is now ACTIVE (RUN)")
             
             # Imposta sempre la missione attiva nello stato RUN
+            self.mission_is_active = True
+
+        # Transizione da RUN a ERROR
+        elif prev_status == "RUN" and current_status == "ERROR":
+            rospy.logwarn("Mission entered ERROR state (RUN -> ERROR)")
+            # Missione ancora attiva: puo' riprendere con ERROR -> RUN
             self.mission_is_active = True
     
         # Transizione da RUN a IDLE
@@ -713,6 +786,12 @@ class Proxima:
                 # Fallback conservativo: preserva la vecchia logica
                 elif self.target is not None:
                     self.initial_wp = self.target
+
+                # Fine missione: rimuovi il path da RViz e resetta il target attivo
+                self.clear_global_path()
+                self.target_wp = None
+                self.path_length = None
+                self.target_type = None
     
             # Aggiorno lo stato della missione
             self.mission_is_active = False
@@ -748,7 +827,7 @@ class Proxima:
             else:
                 msg += " | Pose: unavailable"
 
-        rospy.loginfo(msg)
+        # rospy.loginfo(msg)
 
     # ---------------------------
     # Callback ROS
@@ -908,8 +987,10 @@ class Proxima:
             self.update_mission_status()
  
             # Calcola la distanza dal target
+            if self.target_wp is not None:
+                self.try_update_global_path()
+
             if self.target_wp is not None and self.robot_status.get("pose"):
-                self.publish_global_path()
                 self.path_length = self.calculate_path_length(self.robot_status["pose"], self.target_wp)
                
             # Stampa le informazioni di log
