@@ -9,14 +9,17 @@
     <arg name="map_file" value="$(find alterego_navigation)/config/$(arg location)_config/maps/proxima.json" />
     <param name="map_file" value="$(arg map_file)" />
 
-    <arg name="initial_waypoint" value="INGRESSO" />
+    <arg name="initial_waypoint" value="Q4" />
     <param name="initial_waypoint" value="$(arg initial_waypoint)" />
+
+    <!-- Abilita RViz bridge -->
+    <arg name="use_rviz" default="false" />
     
     <group ns="$(env ROBOT_NAME)"> 
 
-        <node pkg="alterego_navigation" type="nav2points_proxima.py" name="navigation" output="screen">
-                    
-        </node>
+        <node pkg="alterego_navigation" type="navigation_core.py" name="navigation_core" output="screen" />
+
+        <node pkg="alterego_navigation" type="navigation_rviz_bridge.py" name="navigation_rviz_bridge" output="screen" if="$(arg use_rviz)" />
 
     </group>
 
