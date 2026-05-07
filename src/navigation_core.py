@@ -291,6 +291,9 @@ class ProximaNavigationCore:
         return math.hypot(dx, dy)
 
     def send_mission(self, wp_name):
+        self.post_request("navigation-mode", {"type": "auto"})
+        sleep(0.5)
+
         # 1) Rilocalizza il robot
         self.relocalize_robot_before_mission()
 
@@ -325,6 +328,9 @@ class ProximaNavigationCore:
             self.mission_to_be_aborted = False
             
     def send_custom_mission(self, x, y, yaw):
+        self.post_request("navigation-mode", {"type": "auto"})
+        sleep(0.5)
+
         # stessa logica pre-missione di send_mission
         self.relocalize_robot_before_mission()
 

@@ -77,6 +77,7 @@ class RvizBridge:
         rospy.Subscriber('/map', OccupancyGrid, self.map_latch_callback)
         rospy.Subscriber('/robot_pose', PoseStamped, self.get_map_odom_tf)
         rospy.Subscriber('/mission_control/global_path_world', String, self.global_path_world_callback)
+        rospy.Subscriber('goal_reached', String, self.goal_reached_callback)
         
         # Publishers (outputs to core + visualization)
         self.map_pub = rospy.Publisher(f"/{self.robot_name}/map", OccupancyGrid, queue_size=1, latch=True)
@@ -446,6 +447,10 @@ class RvizBridge:
             self.try_update_global_path(path_points)
         except Exception as e:
             rospy.logerr(f"Failed to parse global_path_world: {e}")
+
+    def goal_reached_callback(self, msg: String):
+        if msg.data in ("SUCCEEDED", "ABORTED"):
+            self.clear_global_path()
 
     # ---------------------------
     # Setup visualizzazione (call solo una volta per caricare waypoints)
