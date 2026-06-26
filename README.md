@@ -1,90 +1,87 @@
-# alterego_navigation (ROS2 / Nav2 Migration)
+# alterego_navigation
 
-Helper nodes and services for AlterEGO navigation, migrated from ROS1 (move_base) to ROS2 (Nav2 + NavigateToPose action).
+Pacchetto ROS 2 per AlterEGO che abilita:
 
-## Provided Nodes (Python)
-Installed in `lib/alterego_navigation`:
-* `nav2points.py` (WIP) – listens to `target_location` and will send a `NavigateToPose` goal (location resolution placeholder).
-* `nav2points_service.py` – exposes `navigation_service` (`alterego_msgs/NavService`) to trigger a navigation goal via Nav2.
-* `initialpose.py` – publishes an initial pose using parameter `navigation_locations`.
-* `send_key_points.py` – publishes nearest key point on `nearest_point` and RViz markers (`keypoint_markers_array`).
-* `where_are_you_service.py` – service `where_are_you_service` (`alterego_msgs/WhereRUService`) returning nearest key point.
+- mappatura teleguidata (utente guida il robot mentre SLAM costruisce la mappa)
+- mappatura autonoma (frontier exploration con Nav2)
+- navigazione autonoma su mappa salvata
+- missioni waypoint autonome
 
-## Parameters (expected)
-You must supply structured parameters (converted from old ROS1 parameter server layout):
-* `navigation_locations_hier`: list of dicts: `[{LocationName: [ {SubLocationName: {position: {x:..}, orientation: {x:..}}}, ... ]}, ...]`
-* `navigation_keypoints`: list of dicts: `[{KeyPointName: {position: {...}, orientation: {...}}}, ...]`
-* `navigation_locations`: simplified list of dicts for initial pose (contains an entry with key `Ingresso`).
+## Prerequisiti
 
-Because ROS2 parameters do not natively support arbitrary nested YAML with lists-of-dicts in all launch styles, it is recommended to load them from a YAML file in a launch description.
-
-Example YAML snippet:
-```yaml
-alterego_navigation:
-  ros__parameters:
-	navigation_locations_hier: []        # Fill with your structured locations
-	navigation_keypoints: []             # Fill with keypoints
-	navigation_locations: []             # Must contain an entry with 'Ingresso'
-```
-
-## Launch (example skeleton)
-Create a launch file (e.g. `launch/navigation_nodes.launch.py`):
-```python
-from launch import LaunchDescription
-from launch_ros.actions import Node
-
-def generate_launch_description():
-	params_file = '/path/to/your/navigation_params.yaml'
-	return LaunchDescription([
-		Node(
-			package='alterego_navigation',
-			executable='initialpose.py',
-			name='initialpose_publisher',
-			parameters=[params_file]
-		),
-		Node(
-			package='alterego_navigation',
-			executable='nav2points_service.py',
-			name='nav_service',
-			parameters=[params_file]
-		),
-		Node(
-			package='alterego_navigation',
-			executable='send_key_points.py',
-			name='keypoints',
-			parameters=[params_file]
-		),
-		Node(
-			package='alterego_navigation',
-			executable='where_are_you_service.py',
-			name='where_are_you',
-			parameters=[params_file]
-		),
-	])
-```
-
-Start Nav2 separately (map_server, amcl, lifecycle manager, etc.) ensuring the `navigate_to_pose` action server is available.
-
-## Topics / Services
-* Action: `navigate_to_pose` (Nav2 standard)
-* Service: `/navigation_service` (alterego_msgs/NavService)
-* Service: `/where_are_you_service` (alterego_msgs/WhereRUService)
-* Topic (pub): `goal_reached` (`std_msgs/String`) – basic success notification
-* Topic (sub): `target_location` (`std_msgs/String`) – target name (resolution pending TODO)
-* Topic (pub): `nearest_point` (`std_msgs/String`)
-* Topic (pub): `keypoint_markers_array` (`visualization_msgs/MarkerArray`)
-* Topic (sub): `amcl_pose` (`geometry_msgs/PoseWithCovarianceStamped`)
-
-## TODO / Limitations
-* `nav2points.py` location resolution placeholder – needs adaptation to parameter structure or a resolver utility.
-* Costmap clearing not yet ported (would use `/clear_entirely_local_costmap` etc. lifecycle-safe services in Nav2 if required).
-* No QoS overrides set; if reliability is required for markers or latched behavior, adjust QoS profiles.
+- ROS 2 Jazzy (o distribuzione compatibile con Nav2 usata nel progetto)
+- pacchetti installati: `nav2_bringup`, `slam_toolbox`, `nav2_map_server`
+- topic laser disponibile su `/<robot_name>/scan`
+- TF coerente: `map -> odom -> base_link`
+- topic comando velocita' raggiungibile da Nav2 (`cmd_vel` nel namespace del robot)
 
 ## Build
+
+Dal root workspace:
+
 ```bash
 colcon build --packages-select alterego_navigation
 source install/setup.bash
 ```
 
-## License
-BSD-3-Clause
+## 1) Mappatura Teleguidata
+
+Avvia Nav2 + SLAM e guida il robot con il tuo teleop/pilot:
+
+```bash
+ros2 launch alterego_navigation mapping_teleop.launch.py namespace:=alterego5 use_sim_time:=false
+```
+
+Salva la mappa quando l'ambiente e' stato coperto:
+
+```bash
+ros2 run nav2_map_server map_saver_cli -f /tmp/alterego_map
+```
+
+Questo comando genera `/tmp/alterego_map.yaml` e `/tmp/alterego_map.pgm`.
+
+## 2) Mappatura Autonoma
+
+Avvia Nav2 + SLAM + esploratore frontiere:
+
+```bash
+ros2 launch alterego_navigation mapping_autonomous.launch.py namespace:=alterego5 use_sim_time:=false
+```
+
+L'esploratore invia automaticamente goal verso frontiere sconosciute.
+Salva poi la mappa con `map_saver_cli` come sopra.
+
+## 3) Navigazione Autonoma Su Mappa Salvata
+
+```bash
+ros2 launch alterego_navigation navigation.launch.py namespace:=alterego5 map:=/tmp/alterego_map.yaml use_sim_time:=false
+```
+
+A questo punto puoi inviare goal da RViz (`Nav2 Goal`) o da nodi esterni.
+
+## 4) Missioni Waypoint
+
+Esempio con file waypoint YAML:
+
+```bash
+ros2 launch alterego_navigation waypoint_mission.launch.py namespace:=alterego5 waypoints_file:=/tmp/my_waypoints.yaml
+```
+
+Formato YAML:
+
+```yaml
+waypoints:
+  - x: 0.5
+    y: 0.0
+    yaw: 0.0
+  - x: 1.5
+    y: -0.5
+    yaw: 1.57
+```
+
+## Integrazione con segway / base mobile AlterEGO
+
+Se il tuo controller base non usa direttamente `cmd_vel`, aggiungi un bridge (topic remap o nodo adattatore)
+tra `cmd_vel` di Nav2 e il topic del segway.
+Nel repository esiste gia' `CMD_VEL_IN_topic: cmd_vel` nel pilot, quindi l'integrazione tipica e' diretta
+se Nav2 gira nello stesso namespace robot.

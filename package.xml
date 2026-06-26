@@ -1,31 +1,32 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>alterego_navigation</name>
-  <version>0.11.0</version>
-  <description>Navigation helper nodes (waypoint services, key point detection) for AlterEGO (ROS2 port).</description>
+  <version>0.1.0</version>
+  <description>Nav2-based autonomous mapping and waypoint navigation for AlterEGO.</description>
+  <maintainer email="luca.garello@iit.it">AlterEGO Team</maintainer>
+  <license>Apache-2.0</license>
 
-  <url type="website">https://www.naturalmachinemotioninitiative.com/ego</url>
-  <url type="repository">https://github.com/IIT-SoftBots/AlterEGO_v2</url>
+  <buildtool_depend>ament_python</buildtool_depend>
 
-  <author>NMMI</author>
-  <author>Istituto Italiano di Tecnologia, Soft Robotics for Human Cooperation and Rehabilitation Lab</author>
-  <author>Centro di Ricerca E. Piaggio</author>
-  <maintainer email="mattia.poggiani@iit.it">Mattia Poggiani</maintainer>
-
-  <license>BSD-3-Clause</license>
-
-  <buildtool_depend>ament_cmake</buildtool_depend>
-
-  <!-- Runtime dependencies -->
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>visualization_msgs</exec_depend>
-  <exec_depend>action_msgs</exec_depend>
-  <exec_depend>alterego_msgs</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>alterego_bringup</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <build_type>ament_python</build_type>
   </export>
 </package>
